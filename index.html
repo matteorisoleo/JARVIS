@@ -507,6 +507,10 @@ body.panel .tabs { display: grid; }
             <label for="k-gmodel">Modello Gemini</label>
             <input id="k-gmodel" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gemini-2.5-flash">
           </div>
+          <div class="field so">
+            <button class="btn" id="k-test" type="button">Prova il cervello</button>
+            <p class="hint" id="k-test-out" role="status">Invia una richiesta minima e mostra l'esito esatto: collegamento, chiave o modello.</p>
+          </div>
           <div class="field">
             <span class="lab" id="lab-web">Ricerca web</span>
             <div class="seg" id="seg-web" role="group" aria-labelledby="lab-web">
@@ -554,6 +558,14 @@ body.panel .tabs { display: grid; }
               <button type="button" data-v="off">Spento</button>
             </div>
             <p class="hint">Mentre JARVIS parla ascolta solo parole come «basta» o «stop». Con gli altoparlanti l'eco può confondere il riconoscimento: con le cuffie funziona meglio.</p>
+          </div>
+          <div class="field so">
+            <span class="lab" id="lab-react">Reazione dopo la pausa</span>
+            <div class="seg" id="seg-react" role="group" aria-labelledby="lab-react">
+              <button type="button" data-v="fast">Rapida</button>
+              <button type="button" data-v="normal">Normale</button>
+            </div>
+            <p class="hint">Rapida: JARVIS invia la richiesta circa 1 s dopo che smette di parlare, senza attendere la chiusura del browser. Normale: attende il browser, più lento ma meno propenso a interromperla se fa una pausa lunga.</p>
           </div>
           <div class="field ao">
             <span class="lab" id="lab-auto">Invio automatico dopo la pausa</span>
@@ -691,6 +703,8 @@ body.panel .tabs { display: grid; }
   var DEFAULT_PHRASES = ["sveglia jarvis", "svegliati jarvis", "jarvis svegliati", "ehi jarvis", "hey jarvis", "attiva jarvis"];
 
   /* ---------- Archivio locale (solo comodità del singolo browser) ---------- */
+  /* chiavi e identificativi: solo caratteri ASCII visibili (un a capo o uno spazio incollati bloccano la richiesta) */
+  function keyClean(v) { return String(v == null ? "" : v).replace(/[^\x21-\x7E]/g, ""); }
   var store = {
     get: function (k, d) {
       try { var v = localStorage.getItem("jarvis." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; }
@@ -733,6 +747,7 @@ body.panel .tabs { display: grid; }
     web: store.get("web", false) === true,
     mem: store.get("mem", true) !== false,
     barge: store.get("barge", false) === true,
+    react: store.get("react", "fast") === "normal" ? "normal" : "fast",
     phrases: cleanPhrases(store.get("phrases", null)),
     city: String(store.get("city", "") || "").slice(0, 60),
     missions: arr(store.get("missions", null), [
@@ -749,6 +764,9 @@ body.panel .tabs { display: grid; }
     busy: false,
     streaming: false,
     latency: null,
+    latVoice: null,
+    sentAt: 0,
+    lastModel: "",
     sample: undefined
   };
   /* awake: attivo; activating: sequenza di avvio in corso; convoOn: ascolto continuo dei comandi;
@@ -1128,11 +1146,11 @@ body.panel .tabs { display: grid; }
       uri: String(store.get("voiceUri", "") || ""),
       pitch: clamp(num(store.get("pitch", 0.82), 0.82), 0.5, 1.3),
       rate: clamp(num(store.get("rate", 0.97), 0.97), 0.7, 1.3),
-      elKey: String(store.get("elKey", "") || ""),
-      elVoice: String(store.get("elVoice", "") || ""),
+      elKey: keyClean(store.get("elKey", "")),
+      elVoice: keyClean(store.get("elVoice", "")),
       elModel: store.get("elModel", "eleven_flash_v2_5") === "eleven_multilingual_v2" ? "eleven_multilingual_v2" : "eleven_flash_v2_5"
     };
-    var api = { onChange: noop, onVoices: noop, onError: noop, cfg: cfg };
+    var api = { onChange: noop, onVoices: noop, onError: noop, onSound: noop, cfg: cfg };
     var SYM = [[/\|x\|/g, "valore assoluto di x"], [/√/g, " radice di "], [/²/g, " al quadrato"], [/³/g, " al cubo"], [/≥/g, " maggiore o uguale a "], [/≤/g, " minore o uguale a "], [/≈/g, " circa "], [/≠/g, " diverso da "], [/±/g, " più o meno "], [/×/g, " per "], [/÷/g, " diviso "], [/→/g, " "], [/%/g, " per cento"]];
 
     function elOn() { return STANDALONE && !!cfg.elKey && !!cfg.elVoice; }
@@ -1201,7 +1219,7 @@ body.panel .tabs { display: grid; }
         var my = gen;
         pending++;
         lastQueue = Date.now();
-        u.onstart = function () { if (my === gen) emit(); };
+        u.onstart = function () { if (my === gen) { emit(); api.onSound(); } };
         u.onboundary = function () { if (my === gen) Net.kick(); };
         u.onend = u.onerror = function () {
           if (my !== gen) return;
@@ -1254,6 +1272,7 @@ body.panel .tabs { display: grid; }
               src.onended = function () { if (cur === src) cur = null; res(); };
               src.start(0);
               emit();
+              api.onSound();
             }, function () { rej(new Error("decodifica non riuscita")); });
           });
         });
@@ -2071,11 +2090,11 @@ body.panel .tabs { display: grid; }
 
   /* ---------- Telemetria e crescita della rete (solo una rappresentazione grafica) ---------- */
   function renderTele() {
-    var s = Net.stats(), mm = memCount(), lat = state.latency == null ? "—" : (state.latency / 1000).toFixed(1) + " s";
+    var s = Net.stats(), mm = memCount(), lat = state.latency == null ? "—" : (state.latency / 1000).toFixed(1) + " s", latV = state.latVoice == null ? "—" : (state.latVoice / 1000).toFixed(1) + " s";
     var mic = Ears.ok ? (Ears.active() ? (Ears.mode() === "wake" ? "attesa" : "attivo") : "spento") : "tastiera";
     $("#t-tl").innerHTML = "Rete<br><b>" + s.neurons + "</b> nodi<br><b>" + s.synapses + "</b> collegamenti";
     $("#t-tr").innerHTML = "Livello <b>" + levelOf(state.mind.neurons) + "</b><br>Memoria <b>" + mm + "</b> " + (mm === 1 ? "fatto" : "fatti");
-    $("#t-bl").innerHTML = "Latenza <b>" + lat + "</b><br>Risposte <b>" + state.mind.exchanges + "</b>";
+    $("#t-bl").innerHTML = "Testo <b>" + lat + "</b><br>Audio <b>" + latV + "</b><br>Risposte <b>" + state.mind.exchanges + "</b>";
     $("#t-br").innerHTML = "Voce <b>" + (Voice.can() && Voice.cfg.on ? (Voice.usingEl() ? "eleven" : "attiva") : "spenta") + "</b><br>Mic <b>" + mic + "</b>";
   }
   function learn(n) {
@@ -2496,17 +2515,37 @@ body.panel .tabs { display: grid; }
       if (STOPRE.test(norm(text))) { Voice.cancel(); showSys("Voce interrotta."); }
       return;
     }
-    if (!isFinal) { capUser.textContent = clip(text, 110); Net.kick(); settle(); return; }
+    if (!isFinal) {
+      capUser.textContent = clip(text, 110); Net.kick(); settle();
+      armCommit(text);
+      return;
+    }
+    clearTimeout(commitT);
     silentRuns = 0;
     capUser.textContent = "";
     handleUtterance(text, conf);
   };
+  /* Reazione rapida: il browser chiude l'ascolto solo dopo 1,5-3 s di silenzio. Se la trascrizione
+     provvisoria non cambia per COMMIT_MS la si considera completa e si invia subito. */
+  var COMMIT_MS = 900, commitT = null;
+  function armCommit(text) {
+    clearTimeout(commitT);
+    if (state.react !== "fast" || !text || text.length < 2) return;
+    commitT = setTimeout(function () {
+      if (Ears.mode() !== "cmd" || state.busy) return;
+      Ears.stop();
+      silentRuns = 0;
+      capUser.textContent = "";
+      handleUtterance(text, 0);
+      syncMic();
+    }, COMMIT_MS);
+  }
   Ears.onError = function (code) {
     if (code === "no-speech" || code === "aborted") return;
     var msg;
     if (code === "not-allowed" || code === "service-not-allowed") {
       micBlocked = true; micWhy = "Microfono non autorizzato";
-      msg = "Microfono non autorizzato. Lo consenta nelle impostazioni del browser per questo sito, oppure usi la tastiera.";
+      msg = "Microfono non autorizzato. Lo consenta nelle impostazioni del browser per questo sito. Se la pagina è aperta dentro un'altra app, la apra in Safari. Oppure usi la tastiera.";
     } else if (code === "audio-capture") {
       micBlocked = true; micWhy = "Nessun microfono disponibile";
       msg = "Nessun microfono disponibile.";
@@ -2736,6 +2775,9 @@ body.panel .tabs { display: grid; }
 
   Voice.onChange = function () { musicPolicy(); syncMic(); settle(); };
   Voice.onError = function (m) { showSys(m); };
+  Voice.onSound = function () {
+    if (state.sentAt && state.latVoice == null && Date.now() - state.sentAt < 20000) { state.latVoice = Date.now() - state.sentAt; renderTele(); renderStatus(); }
+  };
   Music.onChange = function () { renderUI(); renderMusicState(); };
   Music.onWarn = function (m) { showSys(m); };
 
@@ -2819,9 +2861,10 @@ body.panel .tabs { display: grid; }
     return { code: c, message: "HTTP " + res.status };
   }
   async function streamClaude(system, turns, tier, onText, signal) {
-    var key = String(store.get("kClaude", "") || "");
+    var key = keyClean(store.get("kClaude", ""));
     if (!key) throw { code: "no_key", message: "no key" };
     var model = { quick: "claude-haiku-5-5", "default": "claude-sonnet-5-5", complex: "claude-opus-5-5" }[tier] || "claude-sonnet-5-5";
+    state.lastModel = model;
     var headers = { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
     var body = { model: model, max_tokens: 1024, system: system, messages: turns, stream: true };
     var useWeb = state.web, webOff = false;
@@ -2846,7 +2889,8 @@ body.panel .tabs { display: grid; }
     return out;
   }
   async function streamGemini(system, turns, tier, onText, signal) {
-    var key = String(store.get("kGemini", "") || ""), model = String(store.get("gModel", "") || "gemini-2.5-flash");
+    var key = keyClean(store.get("kGemini", "")), model = String(store.get("gModel", "") || "gemini-2.5-flash");
+    state.lastModel = model;
     if (!key) throw { code: "no_key", message: "no key" };
     var res = await post("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(key), {
       "content-type": "application/json"
@@ -3015,6 +3059,7 @@ body.panel .tabs { display: grid; }
     state.streaming = false;
     setCap({ user: text, html: '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="wait">Analisi in corso…</span>' });
     var t0 = Date.now();
+    state.sentAt = t0; state.latency = null; state.latVoice = null;
 
     var node = msgEl({ r: "atlas", t: "" });
     node.body.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>';
@@ -3072,6 +3117,7 @@ body.panel .tabs { display: grid; }
       limited = code === "rate_limited";
       if (code !== "cancelled") {
         var em = copyFor(code);
+        if (code === "network") showSys("Dettaglio tecnico: " + clip(String((e && e.message) || ""), 120));
         pushMsg({ r: "err", t: em });
         setCap({ user: text, text: em, err: true });
         setError(em);
@@ -3448,6 +3494,8 @@ body.panel .tabs { display: grid; }
       ["Attivazione vocale", wk],
       ["Musica di attivazione", mu],
       ["Rete neurale (grafica)", ["ok", st.neurons + " nodi · liv. " + levelOf(state.mind.neurons)]],
+      ["Ultima risposta", state.latency == null ? ["wait", "ancora nessuna"] : ["ok", "testo " + (state.latency / 1000).toFixed(1) + " s · audio " + (state.latVoice == null ? "—" : (state.latVoice / 1000).toFixed(1) + " s")]],
+      ["Modello usato", state.lastModel ? ["ok", state.lastModel] : ["wait", "—"]],
       ["Memoria di JARVIS", state.mem ? ["ok", mm + (mm === 1 ? " fatto" : " fatti")] : ["wait", "Disattivata"]],
       ["Gestione attività", ["ok", active + (active === 1 ? " attiva" : " attive")]],
       ["Archivio del browser", storageOk ? ["ok", "Attivo"] : ["wait", "Non disponibile"]]
@@ -3500,6 +3548,7 @@ body.panel .tabs { display: grid; }
   bindSeg("seg-mode", function () { return state.mode; }, function (v) { setMode(v); });
   bindSeg("seg-web", function () { return state.web ? "on" : "off"; }, function (v) { state.web = v === "on"; store.set("web", state.web); });
   bindSeg("seg-mem", function () { return state.mem ? "on" : "off"; }, function (v) { state.mem = v === "on"; store.set("mem", state.mem); renderNotes(); renderStatus(); renderTele(); });
+  bindSeg("seg-react", function () { return state.react; }, function (v) { state.react = v === "normal" ? "normal" : "fast"; store.set("react", state.react); });
   bindSeg("seg-barge", function () { return state.barge ? "on" : "off"; }, function (v) { state.barge = v === "on"; store.set("barge", state.barge); syncMic(); });
   bindSeg("seg-music", function () { return Music.cfg.on ? "on" : "off"; }, function (v) { Music.setOn(v === "on"); if (v !== "on") Music.stop(); renderMusicState(); renderStatus(); });
   bindSeg("seg-wake", function () { return wakeOn ? "on" : "off"; }, function (v) {
@@ -3520,20 +3569,39 @@ body.panel .tabs { display: grid; }
     $("#r-claude").hidden = state.brain !== "claude";
     $("#r-gemini").hidden = state.brain !== "gemini";
   }
-  function bindText(id, get, set) {
+  function bindText(id, get, set, clean) {
     var el = $("#" + id);
     el.value = get();
-    el.addEventListener("input", function () { set(el.value.trim()); renderStatus(); renderVoiceBtn(); });
+    el.addEventListener("input", function () {
+      var v = clean ? keyClean(el.value) : el.value.trim();
+      if (clean && v !== el.value) el.value = v;
+      set(v); renderStatus(); renderVoiceBtn();
+    });
   }
-  bindText("k-claude", function () { return store.get("kClaude", ""); }, function (v) { store.set("kClaude", v); });
-  bindText("k-gemini", function () { return store.get("kGemini", ""); }, function (v) { store.set("kGemini", v); });
+  bindText("k-claude", function () { return store.get("kClaude", ""); }, function (v) { store.set("kClaude", v); }, true);
+  bindText("k-gemini", function () { return store.get("kGemini", ""); }, function (v) { store.set("kGemini", v); }, true);
   bindText("k-gmodel", function () { return store.get("gModel", ""); }, function (v) { store.set("gModel", v); });
-  bindText("k-el", function () { return Voice.cfg.elKey; }, function (v) { Voice.cfg.elKey = v; Voice.save(); });
-  bindText("k-elvoice", function () { return Voice.cfg.elVoice; }, function (v) { Voice.cfg.elVoice = v; Voice.save(); });
+  bindText("k-el", function () { return Voice.cfg.elKey; }, function (v) { Voice.cfg.elKey = v; Voice.save(); }, true);
+  bindText("k-elvoice", function () { return Voice.cfg.elVoice; }, function (v) { Voice.cfg.elVoice = v; Voice.save(); }, true);
   var elModel = $("#k-elmodel");
   elModel.value = Voice.cfg.elModel;
   elModel.addEventListener("change", function () { Voice.cfg.elModel = elModel.value; Voice.save(); });
   renderKeyRows();
+  /* prova del collegamento: dice che cosa va storto invece di un generico «non riuscita» */
+  $("#k-test").addEventListener("click", async function () {
+    var out = $("#k-test-out"), b = this, t0 = Date.now(), c = new AbortController();
+    var tm = setTimeout(function () { c.abort(); }, 20000);
+    b.disabled = true; out.textContent = "Prova in corso…";
+    try {
+      await think("Rispondi soltanto con la parola: ok", [{ role: "user", content: "ping" }], "quick", noop, c.signal);
+      out.textContent = "Collegamento riuscito in " + ((Date.now() - t0) / 1000).toFixed(1) + " s. Modello: " + (state.lastModel || "—") + ".";
+    } catch (e) {
+      var code = e && e.code;
+      if (code === "cancelled") out.textContent = "Nessuna risposta entro 20 s: rete o servizio troppo lenti.";
+      else if (code === "network") out.textContent = "Rete: la richiesta non è partita o è stata bloccata (" + clip(String((e && e.message) || ""), 110) + "). Controlli VPN, «Relay privato» e blocco contenuti, oppure apra la pagina in Safari.";
+      else out.textContent = copyFor(code) + " (" + clip(String((e && e.message) || code), 110) + ")";
+    } finally { clearTimeout(tm); b.disabled = false; }
+  });
   var nameIn = $("#s-name");
   nameIn.value = state.name;
   nameIn.addEventListener("input", function () {
@@ -3598,6 +3666,12 @@ body.panel .tabs { display: grid; }
   $("#m-stop").addEventListener("click", function () { Music.stop(); renderMusicState(); });
 
   /* ---------- Avvio ---------- */
+  /* apre in anticipo la connessione sicura ai servizi in uso: risparmia una frazione di secondo alla prima richiesta */
+  if (STANDALONE) {
+    [state.brain === "gemini" ? "https://generativelanguage.googleapis.com" : "https://api.anthropic.com"].concat(Voice.usingEl() ? ["https://api.elevenlabs.io"] : []).forEach(function (h) {
+      try { var l = document.createElement("link"); l.rel = "preconnect"; l.href = h; l.crossOrigin = ""; document.head.appendChild(l); } catch (e) { /* facoltativo */ }
+    });
+  }
   if (!state.msgs.length) greeting();
   if (store.get("ver", "") !== VERSION) {
     state.msgs.push({ r: "sys", t: "JARVIS Ultron Edition " + VERSION + ": attivazione cinematografica, musica e voce." });
