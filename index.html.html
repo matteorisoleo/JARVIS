@@ -1,0 +1,3627 @@
+<!doctype html><html lang="it"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover"><meta name="theme-color" content="#050102"><meta name="apple-mobile-web-app-capable" content="yes"><style>:root{color-scheme:dark}body{margin:0;font:14px system-ui}img{max-width:100%}[hidden]{display:none!important}</style><title>JARVIS Ultron Edition</title>
+<meta name="claude:viewport-fit-sides" content="cover">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=Saira+Condensed:wght@500;600;700&display=swap" rel="stylesheet">
+<style>
+/* Layout: nero profondo e rosso. Il nucleo 3D occupa lo schermo (canvas a pieno campo, centrato
+   sull'area .stage). Sotto: stato, microfono, un sottotitolo discreto e i pulsanti. Cronologia,
+   attività, memoria, strumenti e impostazioni sono pagine secondarie (menu in alto a destra). */
+:root {
+  color-scheme: dark;
+  --bg: #050102;
+  --surface: #0f0508;
+  --surface-2: #1a080d;
+  --line: #3d1219;
+  --fg: #f5eeee;
+  --muted: #b09a9e;
+  --accent: #ff3b30;
+  --crimson: #c8102e;
+  --on-accent: #170204;
+  --ok: #f5eeee;
+  --warn: #e8707c;
+  --crit: #ff6a5f;
+  --glow: rgba(255, 59, 48, .45);
+  --f-display: "Saira Condensed", "Arial Narrow", sans-serif;
+  --f-body: "IBM Plex Sans", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --f-mono: "IBM Plex Mono", ui-monospace, Menlo, Consolas, monospace;
+  --cut: 12px;
+}
+
+*, *::before, *::after { box-sizing: border-box; }
+html, body { height: 100%; }
+body {
+  background: var(--bg);
+  color: var(--fg);
+  font: 15px/1.5 var(--f-body);
+  padding-inline: max(16px, env(safe-area-inset-left, 0px)) max(16px, env(safe-area-inset-right, 0px));
+  -webkit-tap-highlight-color: transparent;
+}
+button, input, textarea, select { font: inherit; color: inherit; }
+button { cursor: pointer; }
+:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.so { display: none; }
+body.standalone .so { display: block; }
+body.standalone .ao { display: none; }
+.vh { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
+
+.bg { position: fixed; inset: 0; z-index: 0; background: var(--bg); }
+.bg canvas { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+.app { position: relative; z-index: 1; height: 100%; max-width: 760px; margin: 0 auto; display: flex; flex-direction: column; min-height: 0; }
+
+/* Testata */
+.top { flex: none; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px 4px; }
+body.panel .top { display: none; }
+.word { font: 700 24px/1 var(--f-display); letter-spacing: .3em; }
+.ver { font: 400 10px/1.4 var(--f-mono); color: var(--muted); letter-spacing: .1em; margin-top: 3px; text-transform: uppercase; }
+.topr { display: flex; align-items: center; gap: 10px; flex: none; }
+.aiind { display: inline-flex; align-items: center; gap: 7px; font: 500 10px/1 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); }
+.menubtn { width: 40px; height: 40px; border: 1px solid var(--line); border-radius: 10px; background: rgba(15, 5, 8, .7); display: grid; place-items: center; padding: 0; }
+.menubtn svg { width: 20px; height: 20px; fill: none; stroke: var(--fg); stroke-width: 1.8; stroke-linecap: round; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); flex: none; }
+.dot.ok { background: var(--ok); box-shadow: 0 0 6px rgba(245, 238, 238, .6); }
+.dot.wait { background: var(--warn); }
+.dot.off { background: var(--crit); animation: blink 1.1s infinite; }
+
+/* Testata delle pagine secondarie */
+.panelhead { flex: none; display: none; align-items: center; justify-content: space-between; gap: 12px; padding-block: 12px 8px; border-bottom: 1px solid var(--line); }
+body.panel .panelhead { display: flex; }
+.panelhead h1 { margin: 0; font: 600 20px var(--f-display); letter-spacing: .2em; text-transform: uppercase; }
+.closebtn { height: 40px; padding: 0 14px; border: 1px solid var(--accent); border-radius: 10px; background: none; color: var(--accent); font: 600 12px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; }
+
+/* Viste */
+main { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.view { flex: 1; min-height: 0; display: flex; flex-direction: column; }
+.scroll { flex: 1; min-height: 0; overflow-y: auto; padding-block: 16px; }
+.link { background: none; border: 0; padding: 8px 0; color: var(--accent); font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; }
+.link[hidden] { display: none; }
+.pagehead { flex: none; display: flex; align-items: center; justify-content: flex-end; gap: 12px; padding-block: 4px; }
+
+/* Nucleo e telemetria */
+.stage { position: relative; flex: 1 1 0; min-height: 140px; cursor: grab; outline-offset: -2px; touch-action: none; user-select: none; -webkit-user-select: none; }
+.stage:active { cursor: grabbing; }
+.tele { position: absolute; font: 500 10px/1.5 var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: rgba(255, 100, 90, .78); pointer-events: none; }
+.tele b { color: var(--fg); font-weight: 500; }
+.tele { transition: opacity .4s; }
+body.booting .tele { opacity: 0; }
+.tele.tl { left: 0; top: 0; } .tele.tr { right: 0; top: 0; text-align: right; }
+.tele.bl { left: 0; bottom: 22px; } .tele.br { right: 0; bottom: 22px; text-align: right; }
+.state { position: absolute; left: 0; right: 0; bottom: 2px; text-align: center; pointer-events: none; font: 600 13px/1 var(--f-display); letter-spacing: .38em; text-indent: .38em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 12px var(--glow); }
+.state.err { animation: errblink .7s steps(2, jump-none) infinite; }
+@keyframes errblink { 0% { opacity: 1; } 100% { opacity: .25; } }
+.typing .tele { display: none; }
+@media (max-height: 700px) { .tele { display: none; } }
+.boot { position: absolute; left: 0; right: 0; top: 2px; pointer-events: none; text-align: center; font: 500 10px/1.8 var(--f-mono); letter-spacing: .16em; text-transform: uppercase; color: var(--accent); text-shadow: 0 0 8px var(--glow); }
+.boot div { opacity: 0; animation: bootin .4s forwards; }
+.boot.out { opacity: 0; transition: opacity .8s; }
+@keyframes bootin { from { opacity: 0; transform: translateY(-3px); } to { opacity: 1; transform: none; } }
+
+/* Stato e microfono */
+.statusrow { flex: none; display: flex; flex-direction: column; align-items: center; gap: 6px; padding-top: 6px; text-align: center; }
+.sub { font: 500 15px/1.3 var(--f-body); color: var(--fg); letter-spacing: .02em; }
+.micind { display: inline-flex; align-items: center; gap: 8px; font: 500 11px/1.4 var(--f-mono); letter-spacing: .08em; text-transform: uppercase; color: var(--muted); }
+.micdot { width: 9px; height: 9px; border-radius: 50%; border: 1.5px solid var(--muted); flex: none; }
+.micind[data-s="wake"] { color: var(--fg); }
+.micind[data-s="wake"] .micdot { border-color: var(--accent); animation: micslow 2.4s ease-in-out infinite; }
+.micind[data-s="live"] { color: var(--accent); }
+.micind[data-s="live"] .micdot { background: var(--accent); border-color: var(--accent); animation: micpulse 1.1s ease-in-out infinite; }
+.micind[data-s="na"] { color: var(--crit); }
+.micind[data-s="na"] .micdot { border-color: var(--crit); background: linear-gradient(135deg, transparent 44%, var(--crit) 44% 56%, transparent 56%); }
+@keyframes micslow { 0%, 100% { box-shadow: 0 0 0 0 var(--glow); } 50% { box-shadow: 0 0 0 5px rgba(255, 59, 48, 0); } }
+@keyframes micpulse { 0%, 100% { box-shadow: 0 0 0 0 var(--glow); } 50% { box-shadow: 0 0 0 7px rgba(255, 59, 48, 0); } }
+
+/* Sottotitoli: un riepilogo discreto */
+.cap { flex: none; display: flex; flex-direction: column; gap: 3px; padding-top: 8px; }
+.cap-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.cap-who { font: 500 11px var(--f-mono); letter-spacing: .14em; text-transform: uppercase; color: var(--accent); }
+.cap-user { font-size: 13px; line-height: 1.35; color: var(--muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-height: 1.35em; }
+.cap-body { font-size: 16px; line-height: 1.45; max-height: 12vh; min-height: 2.9em; overflow-y: auto; overscroll-behavior: contain; overflow-wrap: anywhere; }
+.cap-body > * + * { margin-top: .5em; }
+.cap-body p { margin: 0; }
+.cap-body ul, .cap-body ol { margin: 0; padding-left: 1.25em; }
+.cap-body code { font: 14px var(--f-mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.cap-body pre { margin: 0; overflow-x: auto; background: var(--surface-2); padding: 8px 10px; border-radius: 8px; }
+.cap-body pre code { background: none; padding: 0; white-space: pre; }
+.cap.err .cap-body { color: var(--crit); }
+.cap.standby .cap-user, .cap.standby .cap-head { display: none; }
+.cap.standby .cap-body { color: var(--muted); font: 400 12px/1.5 var(--f-mono); letter-spacing: .04em; text-align: center; min-height: 0; }
+.cap-sys { font: 12px/1.4 var(--f-mono); color: var(--accent); min-height: 1.4em; opacity: .95; }
+.dots { display: inline-flex; gap: 4px; vertical-align: middle; margin-right: 8px; }
+.dots i { width: 6px; height: 6px; border-radius: 50%; background: var(--accent); animation: blink 1.2s infinite; }
+.dots i:nth-child(2) { animation-delay: .2s; }
+.dots i:nth-child(3) { animation-delay: .4s; }
+@keyframes blink { 0%, 80%, 100% { opacity: .25; } 40% { opacity: 1; } }
+.wait { color: var(--muted); font: 13px var(--f-mono); }
+
+/* Pulsanti della schermata principale */
+.actions { flex: none; display: flex; flex-direction: column; gap: 8px; padding-block: 6px; }
+.btn { height: 46px; padding: 0 18px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font: 700 16px var(--f-display); letter-spacing: .14em; text-transform: uppercase; }
+.btn:disabled { opacity: .5; cursor: default; }
+.btn.main { height: 52px; width: 100%; font-size: 18px; box-shadow: 0 0 22px rgba(255, 59, 48, .28); }
+.btn.main.live { background: transparent; color: var(--accent); border: 1.5px solid var(--accent); box-shadow: 0 0 22px rgba(255, 59, 48, .2) inset; }
+.btn.ghost { background: none; color: var(--accent); border: 1px solid var(--accent); }
+.subacts { display: flex; flex-wrap: wrap; justify-content: center; gap: 8px; }
+.chip { height: 38px; padding: 0 14px; border: 1px solid var(--line); border-radius: 19px; background: rgba(15, 5, 8, .8); color: var(--fg); font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+.chip[hidden] { display: none; }
+.chip.hot { border-color: var(--accent); color: var(--accent); }
+.chip[aria-pressed="false"] { color: var(--muted); }
+
+/* Barra di dettatura (tastiera) */
+.voicebar { flex: none; display: none; align-items: flex-end; gap: 8px; padding-block: 4px 6px; }
+body.kbd .voicebar { display: flex; }
+.vfield { position: relative; flex: 1; min-width: 0; display: flex; background: rgba(15, 5, 8, .88); border: 1px solid var(--line); border-radius: 23px; padding: 1px 14px; }
+.vfield:focus-within { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent), 0 0 18px var(--glow); }
+.vfield textarea { flex: 1; min-width: 0; background: none; border: 0; outline: none; resize: none; padding: 11px 2px; font-size: 16px; line-height: 1.35; max-height: 110px; }
+.vfield textarea::placeholder { color: var(--muted); }
+.send { position: relative; flex: none; width: 46px; height: 46px; border-radius: 50%; border: 0; background: var(--accent); color: var(--on-accent); display: grid; place-items: center; font: 700 14px var(--f-mono); }
+.send .ico { width: 20px; height: 20px; fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+.send.stop { background: transparent; color: var(--crit); border: 1px solid var(--crit); }
+.send:disabled { opacity: .6; cursor: default; }
+.send .arm { position: absolute; inset: -5px; width: calc(100% + 10px); height: calc(100% + 10px); transform: rotate(-90deg); pointer-events: none; }
+.send .arm circle { fill: none; stroke: var(--accent); stroke-width: 2; stroke-dasharray: 157; stroke-dashoffset: 157; opacity: 0; }
+.send.arming .arm circle { opacity: .95; animation: arm var(--auto, 3s) linear forwards; }
+@keyframes arm { from { stroke-dashoffset: 157; } to { stroke-dashoffset: 0; } }
+.hintline { flex: none; margin: 0; padding: 0 4px 8px; font: 400 11px/1.4 var(--f-mono); color: var(--muted); text-align: center; letter-spacing: .03em; }
+.hintline[hidden] { display: none; }
+
+/* Cronologia */
+.log { flex: 1; min-height: 0; overflow-y: auto; padding-block: 12px; }
+.msg { display: flex; flex-direction: column; gap: 4px; margin-bottom: 14px; max-width: 94%; }
+.msg .who { font: 500 11px var(--f-mono); letter-spacing: .12em; text-transform: uppercase; color: var(--muted); }
+.msg .body { padding: 10px 14px; overflow-wrap: anywhere; min-width: 0; }
+.msg .body > * + * { margin-top: .55em; }
+.msg .body p { margin: 0; }
+.msg .body ul, .msg .body ol { margin: 0; padding-left: 1.25em; }
+.msg .body code { font: 13px var(--f-mono); background: var(--surface-2); padding: 1px 5px; border-radius: 4px; }
+.msg .body pre { margin: 0; overflow-x: auto; background: var(--surface-2); padding: 10px 12px; border-radius: 8px; max-width: 100%; }
+.msg .body pre code { background: none; padding: 0; white-space: pre; }
+.msg .body a { color: var(--accent); overflow-wrap: anywhere; }
+.msg.atlas .body { background: var(--surface); clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%); }
+.msg.atlas .who { color: var(--accent); }
+.msg.user { align-self: flex-end; align-items: flex-end; }
+.msg.user .body { background: var(--surface-2); border-radius: 12px 12px 2px 12px; }
+.msg.err .who, .msg.err .body { color: var(--crit); }
+.msg.err .body { border: 1px solid var(--crit); border-radius: 6px; }
+.msg.sys { max-width: 100%; margin-bottom: 10px; font: 12px/1.4 var(--f-mono); color: var(--accent); }
+.srcs { font: 12px/1.5 var(--f-mono); color: var(--muted); }
+
+/* Elenchi (attività, note) */
+.sum { font: 400 12px var(--f-mono); color: var(--muted); letter-spacing: .04em; margin-bottom: 8px; }
+.sum b { color: var(--fg); font-weight: 500; }
+.list { list-style: none; margin: 0; padding: 0; }
+.mrow { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; align-items: center; gap: 12px; padding: 12px 0; border-top: 1px solid var(--line); }
+.mrow:last-child { border-bottom: 1px solid var(--line); }
+.check { width: 26px; height: 26px; border-radius: 7px; border: 1.5px solid var(--muted); background: none; display: grid; place-items: center; padding: 0; color: var(--on-accent); }
+.check svg { width: 14px; height: 14px; fill: none; stroke: currentColor; stroke-width: 2.2; stroke-linecap: round; stroke-linejoin: round; opacity: 0; }
+.check[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); }
+.check[aria-pressed="true"] svg { opacity: 1; }
+.mt { min-width: 0; }
+.mt .t { display: block; overflow-wrap: anywhere; }
+.mrow.done .t { color: var(--muted); text-decoration: line-through; }
+.meta { display: flex; gap: 8px; align-items: center; margin-top: 2px; font: 500 11px var(--f-mono); letter-spacing: .08em; text-transform: uppercase; }
+.meta b { font-weight: 500; }
+.p-high { color: var(--crit); } .p-med { color: var(--warn); } .p-low { color: var(--muted); }
+.meta em { font-style: normal; color: var(--muted); border: 1px solid var(--line); border-radius: 4px; padding: 0 5px; }
+.meta em.mem { color: var(--accent); border-color: var(--accent); }
+.del { background: none; border: 0; width: 32px; height: 32px; font-size: 20px; line-height: 1; color: var(--muted); border-radius: 8px; }
+.del:hover { color: var(--crit); }
+.empty { padding: 18px 0; color: var(--muted); }
+
+.add { display: grid; grid-template-columns: auto minmax(0, 1fr) auto; gap: 8px; padding-block: 8px 12px; border-top: 1px solid var(--line); }
+.add input, .add select, .add textarea, .field input[type="text"], .field input[type="password"], .field input[type="number"], .field select, .field textarea { background: var(--surface); border: 1px solid var(--line); border-radius: 10px; padding: 10px 12px; font-size: 16px; min-width: 0; }
+.add button.go { height: 44px; padding: 0 16px; border: 0; border-radius: 10px; background: var(--accent); color: var(--on-accent); font: 700 16px var(--f-display); letter-spacing: .1em; text-transform: uppercase; }
+.add.notes { grid-template-columns: minmax(0, 1fr) auto; align-items: end; }
+.add textarea { resize: none; min-height: 44px; max-height: 120px; line-height: 1.4; }
+.add:not(.notes) input[type="text"] { grid-column: 1 / -1; }
+.add input[type="datetime-local"] { color-scheme: dark; }
+.note { padding: 12px 0; border-top: 1px solid var(--line); display: grid; grid-template-columns: minmax(0, 1fr) auto; gap: 4px 12px; }
+.note:last-child { border-bottom: 1px solid var(--line); }
+.note p { margin: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+.note .meta { grid-column: 1; color: var(--muted); }
+
+/* Impostazioni e strumenti */
+.panel { background: var(--surface); padding: 14px 16px 6px; margin-bottom: 16px; clip-path: polygon(0 0, calc(100% - var(--cut)) 0, 100% var(--cut), 100% 100%, 0 100%); }
+.panel h2 { margin: 0 0 6px; font: 600 17px var(--f-display); letter-spacing: .14em; text-transform: uppercase; text-wrap: balance; }
+.srow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 0; border-top: 1px solid var(--line); }
+.srow .st { display: inline-flex; align-items: center; gap: 8px; font: 500 12px var(--f-mono); letter-spacing: .04em; text-align: right; font-variant-numeric: tabular-nums; }
+.field { padding: 10px 0 14px; border-top: 1px solid var(--line); display: grid; gap: 8px; }
+.field label, .field .lab { font: 500 11px var(--f-mono); letter-spacing: .1em; text-transform: uppercase; color: var(--muted); display: flex; justify-content: space-between; gap: 8px; }
+.field input[type="text"], .field input[type="password"], .field input[type="number"], .field select, .field textarea { width: 100%; }
+.field textarea { resize: vertical; min-height: 84px; line-height: 1.4; }
+.field input[type="range"] { width: 100%; accent-color: var(--accent); min-height: 28px; }
+.seg { display: flex; border: 1px solid var(--line); border-radius: 10px; overflow: hidden; }
+.seg.wrap { flex-wrap: wrap; }
+.seg button { flex: 1; min-width: 0; background: none; border: 0; padding: 9px 4px; font-size: 14px; }
+.seg button + button { border-left: 1px solid var(--line); }
+.seg.wrap button { flex: 1 1 33%; border-top: 1px solid var(--line); }
+.seg button[aria-pressed="true"] { background: var(--accent); color: var(--on-accent); font-weight: 600; }
+.hint { margin: 0; font-size: 13px; color: var(--muted); }
+.fine { margin: 0 0 16px; font-size: 13px; color: var(--muted); }
+.filest { font: 500 12px/1.5 var(--f-mono); color: var(--fg); overflow-wrap: anywhere; }
+.filest.none { color: var(--warn); }
+.row2 { display: flex; flex-wrap: wrap; gap: 8px; }
+.row2 .btn { flex: 1 1 140px; height: 42px; font-size: 14px; }
+.trow { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 8px 0; border-top: 1px solid var(--line); font: 500 13px var(--f-mono); font-variant-numeric: tabular-nums; }
+
+/* Richiesta unica di abilitazione audio */
+.gate { position: fixed; inset: 0; z-index: 30; display: grid; place-items: center; padding: 24px; background: rgba(5, 1, 2, .86); }
+.gate[hidden] { display: none; }
+.gatebox { width: min(100%, 340px); background: var(--surface); border: 1px solid var(--accent); padding: 22px 20px; display: grid; gap: 14px; text-align: center; box-shadow: 0 0 40px rgba(255, 59, 48, .25); }
+.gatebox p { margin: 0; font-size: 15px; }
+
+/* Barra di navigazione delle pagine secondarie */
+.tabs { flex: none; display: none; grid-template-columns: repeat(5, 1fr); border-top: 1px solid rgba(70, 20, 28, .9); background: rgba(5, 1, 2, .8); }
+body.panel .tabs { display: grid; }
+.tab { position: relative; background: none; border: 0; padding: 9px 2px 7px; display: flex; flex-direction: column; align-items: center; gap: 3px; color: var(--muted); font: 500 10px var(--f-mono); letter-spacing: .06em; text-transform: uppercase; }
+.tab svg { width: 21px; height: 21px; fill: none; stroke: currentColor; stroke-width: 1.7; stroke-linecap: round; stroke-linejoin: round; }
+.tab[aria-selected="true"] { color: var(--accent); }
+.tab[aria-selected="true"]::before { content: ""; position: absolute; top: -1px; left: 22%; right: 22%; height: 2px; background: var(--accent); box-shadow: 0 0 8px var(--glow); }
+.badge { position: absolute; top: 5px; left: calc(50% + 8px); min-width: 17px; padding: 0 4px; border-radius: 9px; background: var(--accent); color: var(--on-accent); font: 600 10px/17px var(--f-mono); text-align: center; letter-spacing: 0; }
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; scroll-behavior: auto !important; transition: none !important; }
+  .boot div { opacity: 1; }
+}
+.gatebox .btn.ghost { width: 100%; }
+.gatebox .btn.ghost[hidden] { display: none; }
+</style>
+
+</head><body><div class="bg" id="bg" aria-hidden="true"><canvas id="neural"></canvas></div>
+
+<div class="app" id="app">
+  <header class="top">
+    <div>
+      <div class="word" id="word">JARVIS</div>
+      <div class="ver" id="ver">Ultron Edition</div>
+    </div>
+    <div class="topr">
+      <div class="aiind" id="ai-ind"><i class="dot wait" id="ai-dot"></i><span id="ai-txt">IA</span></div>
+      <button class="menubtn" id="menu" type="button" aria-label="Apri memoria, attività, strumenti e impostazioni">
+        <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 7h16M4 12h16M4 17h16"/></svg>
+      </button>
+    </div>
+  </header>
+  <div class="panelhead">
+    <h1 id="panel-title">Impostazioni</h1>
+    <button class="closebtn" id="panel-close" type="button">Nucleo ✕</button>
+  </div>
+
+  <main>
+    <!-- Nucleo -->
+    <section class="view" id="v-console">
+      <div class="stage" id="stage" role="button" tabindex="0" aria-label="Nucleo di JARVIS. Tocchi per attivare, per interrompere la voce o per parlare. Trascini per ruotarlo.">
+        <div class="tele tl" id="t-tl"></div>
+        <div class="tele tr" id="t-tr"></div>
+        <div class="tele bl" id="t-bl"></div>
+        <div class="tele br" id="t-br"></div>
+        <div class="boot" id="boot" aria-hidden="true"></div>
+        <div class="state" id="mode-txt">Standby</div>
+      </div>
+      <div class="statusrow">
+        <div class="sub" id="sub-txt" aria-live="polite">In attesa del comando</div>
+        <div class="micind" id="micind" data-s="off"><i class="micdot"></i><span id="mic-txt">Microfono spento</span></div>
+      </div>
+      <div class="cap standby" id="cap">
+        <div class="cap-head">
+          <span class="cap-who">JARVIS</span>
+          <button class="link" id="open-hist" type="button">Cronologia</button>
+        </div>
+        <div class="cap-user" id="cap-user"></div>
+        <div class="cap-body" id="cap-body"></div>
+        <div class="cap-sys" id="cap-sys" aria-live="polite"></div>
+      </div>
+      <div class="actions">
+        <button class="btn main" id="act" type="button">Attiva JARVIS</button>
+        <div class="subacts">
+          <button class="chip" id="wakebtn" type="button" aria-pressed="false" hidden>Sveglia vocale: off</button>
+          <button class="chip hot" id="stopv" type="button" hidden>Interrompi voce</button>
+          <button class="chip hot" id="stopm" type="button" hidden>Ferma musica</button>
+          <button class="chip" id="voice" type="button" aria-pressed="true" hidden>Voce: on</button>
+          <button class="chip" id="sleep" type="button" hidden>Standby</button>
+          <button class="chip" id="kbd" type="button" aria-pressed="false" hidden>Tastiera</button>
+        </div>
+      </div>
+      <form class="voicebar" id="f-chat" autocomplete="off">
+        <div class="vfield">
+          <textarea id="q" rows="1" enterkeyhint="send" lang="it" spellcheck="false" placeholder="Parli o scriva" aria-label="Messaggio per JARVIS"></textarea>
+        </div>
+        <button class="send" id="send" type="submit" aria-label="Invia">
+          <svg class="arm" viewBox="0 0 54 54" aria-hidden="true"><circle cx="27" cy="27" r="25"/></svg>
+          <span id="send-face"></span>
+        </button>
+      </form>
+      <p class="hintline" id="hintline"></p>
+    </section>
+
+    <!-- Cronologia -->
+    <section class="view" id="v-history" hidden>
+      <div class="pagehead"><button class="link" id="reset" type="button">Nuova sessione</button></div>
+      <div class="log" id="log" role="log" aria-live="polite"></div>
+    </section>
+
+    <!-- Attività -->
+    <section class="view" id="v-missions" hidden>
+      <div class="scroll">
+        <div class="sum" id="m-sum"></div>
+        <ul class="list" id="m-list"></ul>
+      </div>
+      <form class="add" id="f-mission" autocomplete="off">
+        <input id="m-title" type="text" maxlength="140" placeholder="Nuova attività" aria-label="Titolo dell'attività" required>
+        <select id="m-pri" aria-label="Priorità">
+          <option value="high">Alta</option>
+          <option value="med" selected>Media</option>
+          <option value="low">Bassa</option>
+        </select>
+        <input id="m-due" type="datetime-local" aria-label="Scadenza (facoltativa)">
+        <button class="go" type="submit">Aggiungi</button>
+      </form>
+    </section>
+
+    <!-- Memoria e note -->
+    <section class="view" id="v-notes" hidden>
+      <div class="scroll">
+        <div class="sum" id="n-sum"></div>
+        <div id="n-list"></div>
+        <div class="row2" style="margin-top:14px">
+          <button class="btn ghost" id="n-export" type="button">Esporta</button>
+          <button class="btn ghost" id="n-wipe" type="button">Cancella la memoria</button>
+        </div>
+        <p class="hint" id="n-wipe-msg" style="margin-top:8px"></p>
+      </div>
+      <form class="add notes" id="f-note" autocomplete="off">
+        <textarea id="n-text" rows="1" maxlength="1000" placeholder="Nuova nota" aria-label="Testo della nota" required></textarea>
+        <button class="go" type="submit">Archivia</button>
+      </form>
+    </section>
+
+    <!-- Strumenti -->
+    <section class="view" id="v-tools" hidden>
+      <div class="scroll">
+        <div class="panel">
+          <h2>Modalità</h2>
+          <div class="field">
+            <div class="seg wrap" id="seg-mode" role="group" aria-label="Modalità conversazionale">
+              <button type="button" data-v="daily">Quotidiano</button>
+              <button type="button" data-v="study">Studio</button>
+              <button type="button" data-v="code">Codice</button>
+              <button type="button" data-v="research">Ricerca</button>
+              <button type="button" data-v="work">Produttività</button>
+              <button type="button" data-v="translate">Traduzione</button>
+              <button type="button" data-v="write">Scrittura</button>
+            </div>
+            <p class="hint">Si cambia anche a voce, per esempio «modalità studio».</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Meteo</h2>
+          <div class="field">
+            <label for="w-city">Località preferita</label>
+            <input id="w-city" type="text" maxlength="60" placeholder="Es. Milano" autocomplete="off">
+            <button class="btn" id="w-go" type="button">Mostra il meteo</button>
+            <p class="hint" id="w-out" aria-live="polite">Dati di Open-Meteo, gratuito e senza chiave. Funziona solo nella versione autonoma.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Timer</h2>
+          <div class="field">
+            <label for="t-min">Durata in minuti</label>
+            <input id="t-min" type="number" inputmode="numeric" min="1" max="600" value="5">
+            <button class="btn" id="t-go" type="button">Avvia timer</button>
+            <div id="t-list"></div>
+            <p class="hint">Suonano e parlano solo se questa pagina resta aperta. Non invio notifiche di sistema.</p>
+          </div>
+        </div>
+        <div class="panel">
+          <h2>Documento</h2>
+          <div class="field">
+            <span class="lab" id="lab-doc">File da consultare</span>
+            <label class="btn ghost" for="d-file" style="display:grid;place-items:center">Scegli un file</label>
+            <input class="vh" id="d-file" type="file" accept=".txt,.md,.csv,.json,.html,.xml,text/*">
+            <div class="filest none" id="d-state">Nessun documento caricato.</div>
+            <div class="row2">
+              <button class="btn" id="d-sum" type="button" disabled>Riassumi</button>
+              <button class="btn ghost" id="d-clear" type="button" disabled>Rimuovi</button>
+            </div>
+            <p class="hint" id="d-hint">Solo file di testo (txt, md, csv, json, html, xml, fino a 2 MB). Si leggono in locale e restano nel contesto, solo per questa sessione, finché non li rimuove. I PDF non sono ancora supportati.</p>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- Impostazioni -->
+    <section class="view" id="v-systems" hidden>
+      <div class="scroll">
+        <div class="panel">
+          <h2>Stato dei sistemi</h2>
+          <div id="s-rows"></div>
+        </div>
+
+        <div class="panel">
+          <h2>Attivazione e musica</h2>
+          <div class="field so">
+            <span class="lab" id="lab-wake">Attivazione vocale</span>
+            <div class="seg" id="seg-wake" role="group" aria-labelledby="lab-wake">
+              <button type="button" data-v="on">Attiva</button>
+              <button type="button" data-v="off">Spenta</button>
+            </div>
+            <p class="hint">Con la pagina aperta e il microfono abilitato, JARVIS aspetta una delle frasi qui sotto. Il microfono resta acceso finché la funzione è attiva.</p>
+          </div>
+          <div class="field ao">
+            <p class="hint">Dentro Claude il microfono è bloccato: la frase «Sveglia JARVIS» non può essere ascoltata. Si attiva con il pulsante o toccando il nucleo; musica, nucleo e benvenuto funzionano allo stesso modo.</p>
+          </div>
+          <div class="field">
+            <label for="s-phrases">Frasi di attivazione (una per riga)</label>
+            <textarea id="s-phrases" rows="3" spellcheck="false" autocapitalize="off"></textarea>
+            <p class="hint">Ogni frase avvia la stessa sequenza. Il riconoscimento tollera piccole differenze di pronuncia.</p>
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-music">Musica automatica</span>
+            <div class="seg" id="seg-music" role="group" aria-labelledby="lab-music">
+              <button type="button" data-v="on">Attiva</button>
+              <button type="button" data-v="off">Spenta</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lab">File musicale</span>
+            <div class="filest none" id="m-state">Nessun file configurato.</div>
+            <div class="row2">
+              <label class="btn ghost" for="m-file" style="display:grid;place-items:center;flex:1 1 140px;height:42px;font-size:14px">Scegli file audio</label>
+              <button class="btn ghost" id="m-clear" type="button" disabled>Rimuovi</button>
+            </div>
+            <input class="vh" id="m-file" type="file" accept="audio/*,.mp3,.m4a,.aac,.wav,.ogg,.flac">
+            <p class="hint" id="m-hint">Il brano non è incluso. Scelga un file che possiede: resta salvato solo su questo dispositivo.</p>
+          </div>
+          <div class="field">
+            <label for="s-mvol"><span>Volume della musica</span><span id="s-mvol-v"></span></label>
+            <input id="s-mvol" type="range" min="0" max="1" step="0.05">
+          </div>
+          <div class="field">
+            <label for="s-mbed"><span>Livello durante la conversazione</span><span id="s-mbed-v"></span></label>
+            <input id="s-mbed" type="range" min="0.05" max="0.6" step="0.05">
+            <p class="hint">Dopo l'introduzione la musica si abbassa e cala ancora quando JARVIS parla. Con il microfono acceso un livello alto può disturbare il riconoscimento.</p>
+          </div>
+          <div class="field">
+            <div class="row2">
+              <button class="btn" id="m-test" type="button">Prova la musica</button>
+              <button class="btn ghost" id="m-stop" type="button">Ferma</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel so" id="p-links">
+          <h2>Collegamenti</h2>
+          <div class="field">
+            <span class="lab" id="lab-brain">Cervello</span>
+            <div class="seg" id="seg-brain" role="group" aria-labelledby="lab-brain">
+              <button type="button" data-v="claude">Claude</button>
+              <button type="button" data-v="gemini">Gemini</button>
+            </div>
+          </div>
+          <div class="field" id="r-claude">
+            <label for="k-claude">Chiave API Anthropic</label>
+            <input id="k-claude" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="sk-ant-…">
+          </div>
+          <div class="field" id="r-gemini" hidden>
+            <label for="k-gemini">Chiave API Gemini</label>
+            <input id="k-gemini" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="AIza…">
+            <label for="k-gmodel">Modello Gemini</label>
+            <input id="k-gmodel" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="gemini-2.5-flash">
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-web">Ricerca web</span>
+            <div class="seg" id="seg-web" role="group" aria-labelledby="lab-web">
+              <button type="button" data-v="on">Attiva</button>
+              <button type="button" data-v="off">Spenta</button>
+            </div>
+            <p class="hint">Usa la ricerca integrata del cervello scelto, quando il suo account la consente, e cita le fonti. Può avere costi a carico del suo account.</p>
+          </div>
+          <div class="field">
+            <label for="k-el">Chiave ElevenLabs</label>
+            <input id="k-el" type="password" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Facoltativa: voce realistica">
+            <label for="k-elvoice">ID della voce</label>
+            <input id="k-elvoice" type="text" autocomplete="off" autocapitalize="off" spellcheck="false" placeholder="Voice ID">
+            <label for="k-elmodel">Modello vocale</label>
+            <select id="k-elmodel">
+              <option value="eleven_multilingual_v2">Qualità (multilingual v2)</option>
+              <option value="eleven_flash_v2_5">Veloce (flash v2.5)</option>
+            </select>
+            <p class="hint">Le chiavi restano solo in questo browser, in chiaro: non usi questo file su un dispositivo condiviso. Senza ElevenLabs si usa la voce del dispositivo, gratuita.</p>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Voce</h2>
+          <div class="field">
+            <label for="s-voice">Voce del dispositivo</label>
+            <select id="s-voice"></select>
+          </div>
+          <div class="field">
+            <label for="s-pitch"><span>Tono</span><span id="s-pitch-v"></span></label>
+            <input id="s-pitch" type="range" min="0.5" max="1.3" step="0.02">
+          </div>
+          <div class="field">
+            <label for="s-rate"><span>Velocità</span><span id="s-rate-v"></span></label>
+            <input id="s-rate" type="range" min="0.7" max="1.3" step="0.02">
+          </div>
+          <div class="field">
+            <button class="btn" id="s-test" type="button">Prova la voce</button>
+            <p class="hint">Con la voce del dispositivo una pagina non può usarne un'altra. Su iPhone, per una voce più naturale, scarichi una voce italiana avanzata in Impostazioni › Accessibilità › Contenuto letto › Voci, poi riapra la pagina.</p>
+          </div>
+          <div class="field so">
+            <span class="lab" id="lab-barge">Interrompi parlando (sperimentale)</span>
+            <div class="seg" id="seg-barge" role="group" aria-labelledby="lab-barge">
+              <button type="button" data-v="on">Attivo</button>
+              <button type="button" data-v="off">Spento</button>
+            </div>
+            <p class="hint">Mentre JARVIS parla ascolta solo parole come «basta» o «stop». Con gli altoparlanti l'eco può confondere il riconoscimento: con le cuffie funziona meglio.</p>
+          </div>
+          <div class="field ao">
+            <span class="lab" id="lab-auto">Invio automatico dopo la pausa</span>
+            <div class="seg" id="seg-auto" role="group" aria-labelledby="lab-auto">
+              <button type="button" data-v="0">No</button>
+              <button type="button" data-v="2">2 s</button>
+              <button type="button" data-v="3">3 s</button>
+              <button type="button" data-v="5">5 s</button>
+            </div>
+            <p class="hint">Quando detta con la tastiera, JARVIS invia da solo la richiesta dopo questa pausa.</p>
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-sfx">Effetti sonori</span>
+            <div class="seg" id="seg-sfx" role="group" aria-labelledby="lab-sfx">
+              <button type="button" data-v="on">Attivi</button>
+              <button type="button" data-v="off">Spenti</button>
+            </div>
+          </div>
+        </div>
+
+        <div class="panel">
+          <h2>Protocolli</h2>
+          <div class="field">
+            <label for="s-name">Appellativo</label>
+            <input id="s-name" type="text" maxlength="30" placeholder="Signore">
+          </div>
+          <div class="field">
+            <label for="w-pref">Località meteo preferita</label>
+            <input id="w-pref" type="text" maxlength="60" placeholder="Es. Milano" autocomplete="off">
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-irony">Ironia</span>
+            <div class="seg" id="seg-irony" role="group" aria-labelledby="lab-irony">
+              <button type="button" data-v="sober">Sobria</button>
+              <button type="button" data-v="british">Britannica</button>
+              <button type="button" data-v="sharp">Pungente</button>
+            </div>
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-depth">Profondità di analisi</span>
+            <div class="seg" id="seg-depth" role="group" aria-labelledby="lab-depth">
+              <button type="button" data-v="auto">Auto</button>
+              <button type="button" data-v="fast">Rapida</button>
+              <button type="button" data-v="std">Standard</button>
+              <button type="button" data-v="deep">Profonda</button>
+            </div>
+            <p class="hint">Auto risponde in fretta alle domande semplici e ragiona di più su quelle difficili. Profonda è la più lenta e la più costosa.</p>
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-mem">Memoria personale</span>
+            <div class="seg" id="seg-mem" role="group" aria-labelledby="lab-mem">
+              <button type="button" data-v="on">Attiva</button>
+              <button type="button" data-v="off">Spenta</button>
+            </div>
+            <p class="hint">Spenta: JARVIS non salva e non legge i fatti memorizzati. Lo si controlla e lo si cancella in Memoria.</p>
+          </div>
+          <div class="field">
+            <span class="lab" id="lab-core">Nucleo</span>
+            <div class="seg" id="seg-core" role="group" aria-labelledby="lab-core">
+              <button type="button" data-v="on">Operativo</button>
+              <button type="button" data-v="off">Disattivato</button>
+            </div>
+            <p class="hint">Disattivato: niente ascolto, niente musica, nucleo attenuato.</p>
+          </div>
+        </div>
+        <p class="fine ao">Dentro Claude una pagina non può usare il microfono né una voce a pagamento: si parla con la dettatura della tastiera e JARVIS risponde con la voce del dispositivo. Per il microfono vero, «Sveglia JARVIS» e la voce ElevenLabs serve la versione autonoma, da aprire in un browser fuori da Claude.</p>
+        <p class="fine">Attività, note, memoria e impostazioni restano in questo browser. Il testo viene inviato al cervello scelto solo quando lei parla o scrive. La rete neurale è una rappresentazione grafica che cresce con l'uso: l'intelligenza è quella del modello, e ciò che JARVIS ricorda di lei sono i fatti salvati come «memoria» in Memoria.</p>
+      </div>
+    </section>
+  </main>
+
+  <nav class="tabs" aria-label="Sezioni di JARVIS" role="tablist">
+    <button class="tab" role="tab" data-v="history" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 5h16v11H9l-5 4z"/></svg>Cronologia
+    </button>
+    <button class="tab" role="tab" data-v="missions" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="8"/><circle cx="12" cy="12" r="3.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></svg>Attività<span class="badge" id="badge" hidden></span>
+    </button>
+    <button class="tab" role="tab" data-v="notes" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 3h9l4 4v14H6z"/><path d="M9 12h7M9 16h7"/></svg>Memoria
+    </button>
+    <button class="tab" role="tab" data-v="tools" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M14 6a4 4 0 0 0 5 5l-9 9a2.5 2.5 0 0 1-4-4z"/><path d="M14 6l3-3 4 4-3 3"/></svg>Strumenti
+    </button>
+    <button class="tab" role="tab" data-v="systems" aria-selected="false">
+      <svg viewBox="0 0 24 24" aria-hidden="true"><rect x="5" y="5" width="14" height="14" rx="2"/><rect x="9" y="9" width="6" height="6"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg>Sistemi
+    </button>
+  </nav>
+</div>
+
+<div class="gate" id="gate" hidden role="dialog" aria-modal="true" aria-labelledby="gate-t">
+  <div class="gatebox">
+    <p id="gate-t">Il browser richiede un tocco per abilitare l'audio. Succede una volta sola.</p>
+    <button class="btn main" id="gate-go" type="button">Abilita audio</button>
+    <button class="btn ghost" id="gate-no" type="button" hidden>Solo manuale</button>
+  </div>
+</div>
+
+<script>
+(function () {
+  "use strict";
+  var $ = function (s, r) { return (r || document).querySelector(s); };
+  var $$ = function (s, r) { return Array.prototype.slice.call((r || document).querySelectorAll(s)); };
+  function noop() {}
+  function wait(ms) { return new Promise(function (r) { setTimeout(r, ms); }); }
+  var B = document.body;
+
+  /* Dentro Claude la pagina ha window.claude; fuori (file ospitato da lei) no. */
+  var STANDALONE = !(window.claude && window.claude.use);
+  B.classList.toggle("standalone", STANDALONE);
+  /* Stato osservabile (serve ai collaudi e alla diagnosi): attributi data-* sul body. */
+  function flag(k, v) { try { B.dataset[k] = String(v); } catch (e) { /* solo diagnostica */ } }
+
+  var VERSION = "2.0";
+  var MIN_N = 90, MAX_N = 360, LV_STEP = 45;
+  var INTRO_MS = 2600;
+  var PRI = { high: "alta", med: "media", low: "bassa" };
+  var PRI_ORDER = { high: 0, med: 1, low: 2 };
+  var IRONY = {
+    sober: "ironia quasi assente, appena un tocco molto raro",
+    british: "ironia britannica leggera ed elegante, al massimo una breve battuta per risposta e solo quando calza",
+    sharp: "ironia asciutta e più marcata, sempre elegante e mai offensiva"
+  };
+  var TIER = { fast: "quick", std: "default", deep: "complex" };
+  var DEPTHS = ["auto", "fast", "std", "deep"];
+  var MODES = {
+    daily: ["Quotidiano", "assistente quotidiano: risposte pratiche, rapide e concrete"],
+    study: ["Studio", "studio e apprendimento: spiega con chiarezza, per gradi e con esempi, e proponi brevi verifiche di comprensione"],
+    code: ["Codice", "programmazione: ragiona da ingegnere del software; il codice va in blocchi e non viene letto ad alta voce"],
+    research: ["Ricerca", "ricerca e analisi: distingui i fatti verificati dalle ipotesi e dai dati non disponibili, e indica i limiti"],
+    work: ["Produttività", "organizzazione e produttività: priorità, piani e prossimi passi concreti"],
+    translate: ["Traduzione", "traduzione: traduci nella lingua richiesta, indica la lingua riconosciuta e segnala le sfumature"],
+    write: ["Scrittura", "supporto alla scrittura: proponi bozze pronte all'uso e varianti di tono"]
+  };
+  var DEFAULT_PHRASES = ["sveglia jarvis", "svegliati jarvis", "jarvis svegliati", "ehi jarvis", "hey jarvis", "attiva jarvis"];
+
+  /* ---------- Archivio locale (solo comodità del singolo browser) ---------- */
+  var store = {
+    get: function (k, d) {
+      try { var v = localStorage.getItem("jarvis." + k); return v == null ? d : JSON.parse(v); } catch (e) { return d; }
+    },
+    set: function (k, v) {
+      try { localStorage.setItem("jarvis." + k, JSON.stringify(v)); return true; } catch (e) { return false; }
+    }
+  };
+  var storageOk = store.set("probe", 1);
+  function arr(v, d) { return Array.isArray(v) ? v : d; }
+  function clamp(v, a, b) { return Math.max(a, Math.min(b, v)); }
+  function num(v, d) { v = Number(v); return isFinite(v) ? v : d; }
+
+  /* ---------- Normalizzazione del parlato e frasi di attivazione ---------- */
+  function norm(s) {
+    var t = String(s).toLowerCase();
+    try { t = t.normalize("NFD").replace(/[̀-ͯ]/g, ""); } catch (e) { /* motori senza normalize */ }
+    return t.replace(/[^a-z0-9]+/g, " ").trim();
+  }
+  /* il riconoscimento scrive il nome in molti modi: li riporta tutti a «jarvis» */
+  var JV = /\b(?:giarvis|garvis|jarvis|jarves|jarvi|giarvi|harvis|sarvis|iarvis|jarvice|yarvis|charvis|giarvice|ciarvis|jervis|gervis|darvis|zarvis|jarbis|giarbis|iarvi)\b/g;
+  function wnorm(s) { return " " + norm(s).replace(JV, "jarvis") + " "; }
+  function cleanPhrases(v) {
+    var out = [];
+    arr(v, []).forEach(function (p) {
+      p = norm(p);
+      if (p.length >= 4 && p.length <= 60 && out.indexOf(p) < 0 && out.length < 10) out.push(p);
+    });
+    return out.length ? out : DEFAULT_PHRASES.slice();
+  }
+
+  var state = {
+    name: String(store.get("name", "Signore") || "Signore").slice(0, 30),
+    irony: IRONY[store.get("irony", "british")] ? store.get("irony", "british") : "british",
+    depth: DEPTHS.indexOf(store.get("depth", "auto")) >= 0 ? store.get("depth", "auto") : "auto",
+    auto: [0, 2, 3, 5].indexOf(num(store.get("auto", 3), 3)) >= 0 ? num(store.get("auto", 3), 3) : 3,
+    brain: store.get("brain", "claude") === "gemini" ? "gemini" : "claude",
+    mode: MODES[store.get("mode", "daily")] ? store.get("mode", "daily") : "daily",
+    core: store.get("core", "on") === "off" ? "off" : "on",
+    web: store.get("web", false) === true,
+    mem: store.get("mem", true) !== false,
+    barge: store.get("barge", false) === true,
+    phrases: cleanPhrases(store.get("phrases", null)),
+    city: String(store.get("city", "") || "").slice(0, 60),
+    missions: arr(store.get("missions", null), [
+      { id: 1, title: "Rivedere il budget del trimestre", pri: "high", done: false, ex: true },
+      { id: 2, title: "Chiamare il commercialista", pri: "med", done: false, ex: true },
+      { id: 3, title: "Prenotare la revisione dell'auto", pri: "low", done: true, ex: true }
+    ]),
+    notes: arr(store.get("notes", null), [
+      { id: 1, text: "Idea: un riepilogo settimanale ogni venerdì alle 17:00.", ts: Date.now() - 86400000, ex: true }
+    ]),
+    msgs: arr(store.get("msgs", []), []),
+    mind: { neurons: clamp(num(store.get("neurons", MIN_N), MIN_N), MIN_N, MAX_N), exchanges: Math.max(0, num(store.get("exchanges", 0), 0)) },
+    doc: null,
+    busy: false,
+    streaming: false,
+    latency: null,
+    sample: undefined
+  };
+  /* awake: attivo; activating: sequenza di avvio in corso; convoOn: ascolto continuo dei comandi;
+     wakeOn: attesa della frase di attivazione (solo versione autonoma con riconoscimento vocale) */
+  var awake = false, activating = false, convoOn = false;
+  var wakeOn = store.get("wake", true) !== false;
+
+  function matchWake(text) {
+    var t = wnorm(text);
+    for (var i = 0; i < state.phrases.length; i++) {
+      var p = wnorm(state.phrases[i]);
+      if (p.trim() && t.indexOf(p) >= 0) return state.phrases[i];
+    }
+    return "";
+  }
+
+  function nid(list) { return list.reduce(function (n, x) { return Math.max(n, Number(x.id) || 0); }, 0) + 1; }
+  function esc(s) {
+    return String(s).replace(/[&<>"']/g, function (c) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c];
+    });
+  }
+  function clip(s, n) { s = String(s); return s.length > n ? s.slice(0, n - 1) + "…" : s; }
+  function levelOf(n) { return 1 + Math.floor((n - MIN_N) / LV_STEP); }
+  function memCount() { return state.notes.filter(function (n) { return n.k === "mem"; }).length; }
+  function cap1(s) { s = String(s || ""); return s.charAt(0).toUpperCase() + s.slice(1); }
+  function fmtPhrase(p) { return cap1(String(p || "").replace(/\bjarvis\b/g, "JARVIS")); }
+
+  /* ---------- Testo formattato (escape prima, poi markup minimo) ---------- */
+  function inline(s) {
+    return esc(s)
+      .replace(/`([^`]+)`/g, "<code>$1</code>")
+      .replace(/\*\*([^*]+)\*\*/g, "<strong>$1</strong>")
+      .replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, '<a href="$2" target="_blank" rel="noopener noreferrer">$1</a>');
+  }
+  function md(text) {
+    var html = "", list = null, code = null, m;
+    function close() { if (list) { html += "</" + list + ">"; list = null; } }
+    String(text).split("\n").forEach(function (raw) {
+      if (/^\s*```/.test(raw)) {
+        if (code === null) { close(); code = []; }
+        else { html += "<pre><code>" + esc(code.join("\n")) + "</code></pre>"; code = null; }
+        return;
+      }
+      if (code !== null) { code.push(raw); return; }
+      var l = raw.replace(/\s+$/, "");
+      if ((m = l.match(/^\s*[-*•]\s+(.*)/))) {
+        if (list !== "ul") { close(); html += "<ul>"; list = "ul"; }
+        html += "<li>" + inline(m[1]) + "</li>";
+      } else if ((m = l.match(/^\s*\d+[.)]\s+(.*)/))) {
+        if (list !== "ol") { close(); html += "<ol>"; list = "ol"; }
+        html += "<li>" + inline(m[1]) + "</li>";
+      } else if (!l.trim()) {
+        close();
+      } else if ((m = l.match(/^#{1,4}\s+(.*)/))) {
+        close();
+        html += "<p><strong>" + inline(m[1]) + "</strong></p>";
+      } else {
+        close();
+        html += "<p>" + inline(l) + "</p>";
+      }
+    });
+    close();
+    if (code !== null) html += "<pre><code>" + esc(code.join("\n")) + "</code></pre>";
+    return html;
+  }
+
+  /* ---------- Comandi nascosti nelle risposte (memoria, attività, note, lingua) ---------- */
+  var MARK = /\[\[\s*(memorizza|missione|completa|nota|dimentica|modifica|lingua)\s*:\s*([^\]]*?)\s*\]\]/gi;
+  var LANG_RE = /\[\[\s*lingua\s*:\s*([A-Za-z]{2}(?:-[A-Za-z]{2})?)\s*\]\]/i;
+  function splitMarks(t) {
+    var cmds = [];
+    var clean = String(t).replace(MARK, function (_, k, v) { cmds.push([k.toLowerCase(), v]); return ""; });
+    return { clean: clean, cmds: cmds };
+  }
+  function hideMarks(t) {
+    return String(t).replace(MARK, "").replace(/\[\[[^\]]*$/, "").replace(/[ \t]+\n/g, "\n");
+  }
+
+  /* ============================================================
+     Audio condiviso: un solo AudioContext per effetti, voce ElevenLabs,
+     musica e onda del nucleo. Dove il browser lo blocca (autoplay),
+     resta "suspended" finché non arriva un gesto dell'utente.
+     ============================================================ */
+  var Aud = (function () {
+    var ctx = null, an = null, buf = null;
+    function get() {
+      try {
+        if (!ctx) { var AC = window.AudioContext || window.webkitAudioContext; if (!AC) return null; ctx = new AC(); }
+        if (ctx.state === "suspended") { var p = ctx.resume(); if (p && p.catch) p.catch(noop); }
+        return ctx;
+      } catch (e) { return null; }
+    }
+    function analyser() {
+      var c = get();
+      if (!c) return null;
+      if (!an) { an = c.createAnalyser(); an.fftSize = 256; an.connect(c.destination); buf = new Uint8Array(an.fftSize); }
+      return an;
+    }
+    function level() {
+      if (!an) return 0;
+      an.getByteTimeDomainData(buf);
+      var s = 0;
+      for (var i = 0; i < buf.length; i++) { var v = (buf[i] - 128) / 128; s += v * v; }
+      return Math.min(1, Math.sqrt(s / buf.length) * 3.2);
+    }
+    /* da chiamare dentro un gesto dell'utente: sblocca il contesto audio (anche su iPhone) */
+    function unlock() {
+      var c = get();
+      if (!c) return null;
+      try {
+        var b = c.createBuffer(1, 1, 22050), s = c.createBufferSource();
+        s.buffer = b; s.connect(c.destination); s.start(0);
+      } catch (e) { /* non indispensabile */ }
+      return c;
+    }
+    return {
+      ctx: get, analyser: analyser, level: level, unlock: unlock,
+      peek: function () { return ctx; },
+      state: function () { return ctx ? ctx.state : "none"; }
+    };
+  })();
+
+  var Sfx = (function () {
+    var on = store.get("sfx", true) !== false;
+    function tone(f0, f1, dur, vol, type, delay) {
+      if (!on) return;
+      var c = Aud.peek() || Aud.ctx();
+      if (!c || c.state !== "running") return;
+      try {
+        var t = c.currentTime + (delay || 0);
+        var o = c.createOscillator(), gn = c.createGain();
+        o.type = type || "sine";
+        o.frequency.setValueAtTime(f0, t);
+        if (f1 !== f0) o.frequency.exponentialRampToValueAtTime(f1, t + dur);
+        gn.gain.setValueAtTime(0.0001, t);
+        gn.gain.exponentialRampToValueAtTime(vol, t + Math.min(0.04, dur / 3));
+        gn.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+        o.connect(gn); gn.connect(c.destination);
+        o.start(t); o.stop(t + dur + 0.05);
+      } catch (e) { /* audio non disponibile */ }
+    }
+    return {
+      boot: function () { tone(70, 480, 1.4, 0.07, "sawtooth"); tone(110, 880, 1.1, 0.04, "square", 0.2); tone(1320, 1320, 0.3, 0.03, "sine", 1.2); },
+      send: function () { tone(740, 740, 0.09, 0.04, "sine"); tone(1100, 1100, 0.12, 0.03, "sine", 0.07); },
+      reply: function () { tone(520, 780, 0.12, 0.035, "triangle"); },
+      listen: function () { tone(660, 990, 0.1, 0.03, "sine"); },
+      alarm: function () { for (var i = 0; i < 4; i++) { tone(880, 880, 0.18, 0.06, "square", i * 0.32); tone(1320, 1320, 0.14, 0.04, "sine", i * 0.32 + 0.16); } },
+      get: function () { return on; },
+      set: function (v) { on = !!v; store.set("sfx", on); }
+    };
+  })();
+
+  /* ============================================================
+     Musica di attivazione. Il brano NON è incluso nella pagina: lo sceglie
+     l'utente (file locale) e resta salvato in IndexedDB sul dispositivo.
+     Catena audio: <audio> → Gain (volume, abbassamento) → Analyser → uscita.
+     Regole: parte una sola volta per attivazione, mai da sola altrove.
+     ============================================================ */
+  var Music = (function () {
+    var DBN = "jarvis-files", ST = "files", KEY = "music";
+    var cfg = {
+      on: store.get("mon", true) !== false,
+      vol: clamp(num(store.get("mvol", 0.8), 0.8), 0, 1),
+      bed: clamp(num(store.get("mbed", 0.3), 0.3), 0.05, 0.6)
+    };
+    var api = { cfg: cfg, onChange: noop, onWarn: noop };
+    var el = null, node = null, gain = null, an = null, abuf = null, graph = false, url = null, meta = null;
+    var playing = false, starting = false, seq = 0, plays = 0, kind = "full", blessP = null, bad = false, testT = null;
+
+    /* --- archivio IndexedDB --- */
+    function idb(job) {
+      return new Promise(function (res, rej) {
+        var rq;
+        try { rq = indexedDB.open(DBN, 1); } catch (e) { rej(e); return; }
+        rq.onupgradeneeded = function () { try { rq.result.createObjectStore(ST); } catch (e) { /* esiste già */ } };
+        rq.onerror = function () { rej(rq.error || new Error("idb")); };
+        rq.onblocked = function () { rej(new Error("idb bloccato")); };
+        rq.onsuccess = function () {
+          var d = rq.result, out;
+          try {
+            var tx = d.transaction(ST, job.w ? "readwrite" : "readonly");
+            out = job.run(tx.objectStore(ST));
+            tx.oncomplete = function () { d.close(); res(out ? out.result : undefined); };
+            tx.onerror = tx.onabort = function () { d.close(); rej(tx.error || new Error("transazione")); };
+          } catch (e) { try { d.close(); } catch (x) { /* già chiuso */ } rej(e); }
+        };
+      });
+    }
+    function idbGet() { return idb({ run: function (os) { return os.get(KEY); } }); }
+    function idbPut(rec) { return idb({ w: true, run: function (os) { return os.put(rec, KEY); } }); }
+    function idbDel() { return idb({ w: true, run: function (os) { return os["delete"](KEY); } }); }
+
+    /* --- elemento audio e catena Web Audio --- */
+    function ensureEl() {
+      if (el) return el;
+      el = document.createElement("audio");
+      el.id = "music-el";
+      el.preload = "auto";
+      el.loop = false;
+      el.setAttribute("playsinline", "");
+      el.setAttribute("webkit-playsinline", "");
+      el.hidden = true;
+      el.addEventListener("ended", function () { playing = false; flag("music", "idle"); flag("mgain", "0.000"); api.onChange(); });
+      el.addEventListener("error", function () {
+        if (!url) return;
+        bad = true; playing = false; flag("music", "error"); api.onChange();
+        api.onWarn("Il file audio non è riproducibile. Provi un altro formato (mp3, m4a, wav).");
+      });
+      B.appendChild(el);
+      return el;
+    }
+    function ensureGraph() {
+      if (graph) return true;
+      var c = Aud.ctx();
+      if (!c || !el) return false;
+      try {
+        node = c.createMediaElementSource(el);
+        gain = c.createGain(); gain.gain.value = 0;
+        an = c.createAnalyser(); an.fftSize = 256; abuf = new Uint8Array(an.fftSize);
+        node.connect(gain); gain.connect(an); an.connect(c.destination);
+        graph = true;
+      } catch (e) { graph = false; }
+      return graph;
+    }
+    function factor() { return kind === "full" ? 1 : kind === "bed" ? cfg.bed : cfg.bed * 0.45; }
+    function eff() { return clamp(cfg.vol * factor(), 0, 1); }
+    function apply(ramp) {
+      var e = eff();
+      flag("mgain", e.toFixed(3));
+      flag("mkind", kind);
+      if (graph) {
+        var c = Aud.peek();
+        try {
+          gain.gain.cancelScheduledValues(c.currentTime);
+          gain.gain.setTargetAtTime(e, c.currentTime, Math.max(0.01, (ramp == null ? 0.5 : ramp) / 3));
+        } catch (x) { /* contesto chiuso */ }
+      } else if (el) { try { el.volume = e; } catch (x) { /* iOS ignora volume */ } }
+    }
+    function setSource(blob, name) {
+      if (url) { try { URL.revokeObjectURL(url); } catch (e) { /* già rilasciato */ } }
+      url = URL.createObjectURL(blob);
+      meta = { name: name || "brano", size: blob.size };
+      bad = false;
+      ensureEl();
+      el.src = url;
+      try { el.load(); } catch (e) { /* alcuni motori non lo richiedono */ }
+      flag("musicfile", "1");
+      api.onChange();
+    }
+
+    /* --- API --- */
+    api.load = function () {
+      return idbGet().then(function (rec) {
+        if (rec && rec.blob) setSource(rec.blob, rec.name);
+        return !!(rec && rec.blob);
+      }).catch(function () { return false; });
+    };
+    api.choose = async function (file) {
+      if (!file) return { ok: false, msg: "Nessun file selezionato." };
+      var okType = /^audio\//.test(file.type) || /\.(mp3|m4a|aac|wav|ogg|oga|flac|opus|weba|mp4)$/i.test(file.name);
+      if (!okType) return { ok: false, msg: "Il file non sembra un audio." };
+      if (file.size > 80 * 1024 * 1024) return { ok: false, msg: "File troppo grande (massimo 80 MB)." };
+      api.stop(0.05);
+      setSource(file, file.name);
+      var saved = true;
+      try { await idbPut({ blob: file, name: file.name, size: file.size, ts: Date.now() }); } catch (e) { saved = false; }
+      return { ok: true, saved: saved };
+    };
+    api.clear = async function () {
+      api.stop(0.05);
+      if (url) { try { URL.revokeObjectURL(url); } catch (e) { /* già rilasciato */ } url = null; }
+      meta = null; bad = false;
+      if (el) { el.removeAttribute("src"); try { el.load(); } catch (e) { /* niente da caricare */ } }
+      flag("musicfile", "0"); flag("music", "idle");
+      try { await idbDel(); } catch (e) { /* archivio non disponibile */ }
+      api.onChange();
+    };
+    api.has = function () { return !!(meta && el && !bad); };
+    api.info = function () { return meta ? { name: meta.name, size: meta.size, bad: bad } : null; };
+    api.playing = function () { return playing; };
+    api.plays = function () { return plays; };
+    api.level = function () {
+      if (!playing || !an) return 0;
+      an.getByteTimeDomainData(abuf);
+      var s = 0;
+      for (var i = 0; i < abuf.length; i++) { var v = (abuf[i] - 128) / 128; s += v * v; }
+      return Math.min(1, Math.sqrt(s / abuf.length) * 3.2);
+    };
+
+    /* sblocco iOS: un play() muto dentro un gesto "benedice" l'elemento, che poi
+       può partire da solo (per esempio quando la frase di attivazione è riconosciuta) */
+    api.bless = function () {
+      if (!meta || !el || playing || starting || blessP) return;
+      try { ensureGraph(); if (graph) gain.gain.value = 0; else el.volume = 0; } catch (e) { /* si prosegue */ }
+      var p;
+      try { p = el.play(); } catch (e) { return; }
+      if (p && p.then) {
+        blessP = p.then(function () { if (!playing && !starting) { el.pause(); el.currentTime = 0; } })
+          .catch(noop)
+          .then(function () { blessP = null; });
+      }
+    };
+
+    /* Avvio: ritorna "started", "off", "nofile", "blocked", "error", "already" o "cancelled" */
+    api.start = async function (opts) {
+      if (!cfg.on && !(opts && opts.force)) return "off";
+      if (!meta || !el) return "nofile";
+      if (bad) return "error";
+      if (playing || starting) return "already";
+      starting = true;
+      var my = ++seq;
+      try {
+        ensureGraph();
+        var c = Aud.ctx();
+        if (blessP) { try { await blessP; } catch (e) { /* ignorato */ } }
+        if (c && c.state !== "running") { try { await Promise.race([c.resume(), wait(400)]); } catch (e) { /* ignorato */ } }
+        if (c && graph && c.state !== "running") return "blocked";
+        if (my !== seq) return "cancelled";
+        el.currentTime = 0;
+        kind = "full";
+        if (graph) { gain.gain.cancelScheduledValues(c.currentTime); gain.gain.setValueAtTime(0, c.currentTime); }
+        try { await el.play(); } catch (e) { return e && e.name === "NotAllowedError" ? "blocked" : "error"; }
+        if (my !== seq) { try { el.pause(); } catch (e) { /* già fermo */ } return "cancelled"; }
+        playing = true;
+        plays++;
+        flag("mplays", plays); flag("music", "playing");
+        apply(1.2);
+        api.onChange();
+        return "started";
+      } finally { starting = false; }
+    };
+    api.stop = function (fade) {
+      seq++;
+      clearTimeout(testT);
+      var was = playing, f = fade == null ? 0.7 : fade, my = seq;
+      playing = false;
+      if (!el) return was;
+      if (was && graph) {
+        try {
+          var c = Aud.peek();
+          gain.gain.cancelScheduledValues(c.currentTime);
+          gain.gain.setTargetAtTime(0, c.currentTime, Math.max(0.01, f / 3));
+        } catch (e) { /* contesto chiuso */ }
+      }
+      setTimeout(function () { if (my === seq) { try { el.pause(); el.currentTime = 0; } catch (e) { /* già fermo */ } } }, was ? f * 1000 + 120 : 0);
+      flag("music", "idle"); flag("mgain", "0.000");
+      api.onChange();
+      return was;
+    };
+    /* kind: full (introduzione), bed (durante la conversazione), voice (mentre parla JARVIS) */
+    api.mode = function (k, ramp) { kind = k; if (playing || starting) apply(ramp); };
+    api.test = async function () {
+      var r = await api.start({ force: true });
+      if (r === "started") {
+        clearTimeout(testT);
+        testT = setTimeout(function () { if (!awake) api.stop(0.8); }, 8000);
+      }
+      return r;
+    };
+    api.setVol = function (v) { cfg.vol = clamp(num(v, 0.8), 0, 1); store.set("mvol", cfg.vol); if (playing) apply(0.2); };
+    api.setBed = function (v) { cfg.bed = clamp(num(v, 0.3), 0.05, 0.6); store.set("mbed", cfg.bed); if (playing) apply(0.2); };
+    api.setOn = function (v) { cfg.on = !!v; store.set("mon", cfg.on); };
+    return api;
+  })();
+
+  /* ============================================================
+     Voce di JARVIS: ElevenLabs (versione autonoma, se la chiave c'è) oppure
+     voce del dispositivo (gratuita). Le frasi si leggono mentre il testo arriva.
+     ============================================================ */
+  var Voice = (function () {
+    var sysOk = false, pending = 0, gen = 0, cursor = 0, spoken = 0, voices = [], wd = null, lastQueue = 0;
+    var cur = null, chain = Promise.resolve(), elWarned = false, curLang = "it-IT", waiters = [], recent = [];
+    try { sysOk = "speechSynthesis" in window && "SpeechSynthesisUtterance" in window; } catch (e) { sysOk = false; }
+    var cfg = {
+      on: store.get("voice", true) !== false,
+      uri: String(store.get("voiceUri", "") || ""),
+      pitch: clamp(num(store.get("pitch", 0.82), 0.82), 0.5, 1.3),
+      rate: clamp(num(store.get("rate", 0.97), 0.97), 0.7, 1.3),
+      elKey: String(store.get("elKey", "") || ""),
+      elVoice: String(store.get("elVoice", "") || ""),
+      elModel: store.get("elModel", "eleven_flash_v2_5") === "eleven_multilingual_v2" ? "eleven_multilingual_v2" : "eleven_flash_v2_5"
+    };
+    var api = { onChange: noop, onVoices: noop, onError: noop, cfg: cfg };
+    var SYM = [[/\|x\|/g, "valore assoluto di x"], [/√/g, " radice di "], [/²/g, " al quadrato"], [/³/g, " al cubo"], [/≥/g, " maggiore o uguale a "], [/≤/g, " minore o uguale a "], [/≈/g, " circa "], [/≠/g, " diverso da "], [/±/g, " più o meno "], [/×/g, " per "], [/÷/g, " diviso "], [/→/g, " "], [/%/g, " per cento"]];
+
+    function elOn() { return STANDALONE && !!cfg.elKey && !!cfg.elVoice; }
+    function load() {
+      try { voices = window.speechSynthesis.getVoices() || []; } catch (e) { voices = []; }
+      api.onVoices();
+    }
+    if (sysOk) {
+      load();
+      try { window.speechSynthesis.addEventListener("voiceschanged", load); } catch (e) { /* alcuni motori non lo supportano */ }
+    }
+    function itVoices() { return voices.filter(function (v) { return /^it/i.test(v.lang); }); }
+    function pick() {
+      var want = curLang.slice(0, 2).toLowerCase();
+      if (want !== "it") {
+        var other = voices.filter(function (v) { return String(v.lang).slice(0, 2).toLowerCase() === want; });
+        if (other.length) return other[0];
+      }
+      if (cfg.uri) { for (var i = 0; i < voices.length; i++) if (voices[i].voiceURI === cfg.uri) return voices[i]; }
+      var list = itVoices();
+      for (var j = 0; j < list.length; j++) if (/luca|cosimo|paolo|giorgio|diego|male|uomo/i.test(list[j].name)) return list[j];
+      return list[0] || null;
+    }
+    function busy() { return pending > 0; }
+    function emit() {
+      flag("speaking", pending > 0 ? "1" : "0");
+      api.onChange(busy());
+      if (pending <= 0 && waiters.length) { var w = waiters.splice(0); w.forEach(function (f) { f(); }); }
+    }
+    function stopWatch() { clearInterval(wd); wd = null; }
+    function watch() {
+      if (wd) return;
+      wd = setInterval(function () {
+        var sp = false;
+        try { sp = sysOk && (window.speechSynthesis.speaking || window.speechSynthesis.pending); } catch (e) { sp = false; }
+        if (pending > 0 && !sp && !cur && Date.now() - lastQueue > (elOn() ? 25000 : 6500)) { api.cancel(); }
+        if (pending <= 0) stopWatch();
+      }, 1500);
+    }
+    function clean(t) {
+      var s = String(t).replace(/https?:\/\/\S+/g, " link ");
+      SYM.forEach(function (p) { s = s.replace(p[0], p[1]); });
+      return s.replace(/^\s*[-•]\s+/gm, "").replace(/[*`#>_~|]/g, " ").replace(/\s+/g, " ").trim();
+    }
+    function pieces(t) {
+      var out = [];
+      while (t.length > 220) {
+        var i = t.lastIndexOf(" ", 220);
+        if (i < 60) i = 220;
+        out.push(t.slice(0, i));
+        t = t.slice(i).trim();
+      }
+      if (t) out.push(t);
+      return out;
+    }
+
+    /* voce del dispositivo */
+    function speakPiece(t) {
+      if (!sysOk) return;
+      try {
+        var u = new SpeechSynthesisUtterance(t);
+        var v = pick();
+        u.lang = v ? v.lang : curLang;
+        if (v) u.voice = v;
+        u.rate = cfg.rate; u.pitch = cfg.pitch; u.volume = 1;
+        var my = gen;
+        pending++;
+        lastQueue = Date.now();
+        u.onstart = function () { if (my === gen) emit(); };
+        u.onboundary = function () { if (my === gen) Net.kick(); };
+        u.onend = u.onerror = function () {
+          if (my !== gen) return;
+          pending = Math.max(0, pending - 1);
+          emit();
+        };
+        window.speechSynthesis.speak(u);
+        watch();
+        emit();
+      } catch (e) { pending = Math.max(0, pending - 1); }
+    }
+
+    /* voce ElevenLabs: ogni frase si scarica subito e si riproduce in ordine */
+    function elFetch(text) {
+      return fetch("https://api.elevenlabs.io/v1/text-to-speech/" + encodeURIComponent(cfg.elVoice) + "?output_format=mp3_44100_128", {
+        method: "POST",
+        headers: { "xi-api-key": cfg.elKey, "Content-Type": "application/json", "Accept": "audio/mpeg" },
+        body: JSON.stringify({ text: text, model_id: cfg.elModel, voice_settings: { stability: 0.45, similarity_boost: 0.85, style: 0.2, use_speaker_boost: true } })
+      }).then(function (r) {
+        if (!r.ok) { var e = new Error("ElevenLabs " + r.status); e.status = r.status; throw e; }
+        return r.arrayBuffer();
+      });
+    }
+    function elFail(err, text) {
+      if (!elWarned) {
+        elWarned = true;
+        api.onError("ElevenLabs: " + (err && err.status ? "errore " + err.status + (err.status === 401 ? " (chiave non valida)" : "") : "connessione o audio non riusciti") + ". Uso la voce del dispositivo.");
+      }
+      speakPiece(text);
+    }
+    function playEl(text) {
+      var my = gen;
+      pending++;
+      lastQueue = Date.now();
+      var p = elFetch(text);
+      p.catch(noop);
+      chain = chain.then(function () {
+        if (my !== gen) return null;
+        return p.then(function (ab) {
+          if (my !== gen) return null;
+          var c = Aud.ctx(), an = Aud.analyser();
+          if (!c || !an) throw new Error("audio non disponibile");
+          return new Promise(function (res, rej) {
+            c.decodeAudioData(ab, function (b) {
+              if (my !== gen) { res(); return; }
+              var src = c.createBufferSource();
+              src.buffer = b;
+              src.connect(an);
+              cur = src;
+              src.onended = function () { if (cur === src) cur = null; res(); };
+              src.start(0);
+              emit();
+            }, function () { rej(new Error("decodifica non riuscita")); });
+          });
+        });
+      }).catch(function (err) {
+        if (my === gen) elFail(err, text);
+      }).then(function () {
+        if (my === gen) { pending = Math.max(0, pending - 1); emit(); }
+      });
+      watch();
+      emit();
+    }
+    function queue(text) {
+      var t = clean(text);
+      if (!t) return;
+      recent.push({ t: t, ts: Date.now() });
+      if (recent.length > 6) recent.shift();
+      pieces(t).forEach(function (pc) { if (elOn()) playEl(pc); else speakPiece(pc); });
+    }
+
+    api.sysOk = sysOk;
+    api.can = function () { return sysOk || elOn(); };
+    api.usingEl = elOn;
+    api.busy = busy;
+    api.itCount = function () { return itVoices().length; };
+    api.list = function () { return itVoices(); };
+    api.current = function () { return pick(); };
+    api.level = function () { return cur ? Aud.level() : 0; };
+    /* testi pronunciati di recente: servono a non scambiare la voce di JARVIS per un comando */
+    api.recent = function () {
+      var now = Date.now();
+      return recent.filter(function (r) { return now - r.ts < 30000; }).map(function (r) { return r.t; });
+    };
+    api.setLang = function (l) { curLang = /^[a-z]{2}(-[A-Za-z]{2})?$/.test(l || "") ? l : "it-IT"; };
+    api.langOk = function () {
+      var want = curLang.slice(0, 2).toLowerCase();
+      return want === "it" || elOn() || voices.some(function (v) { return String(v.lang).slice(0, 2).toLowerCase() === want; });
+    };
+    api.cancel = function () {
+      gen++; pending = 0; cursor = 0; spoken = 0;
+      chain = Promise.resolve();
+      stopWatch();
+      if (cur) { try { cur.onended = null; cur.stop(); } catch (e) { /* già fermo */ } cur = null; }
+      try { if (sysOk) window.speechSynthesis.cancel(); } catch (e) { /* niente da annullare */ }
+      emit();
+    };
+    api.reset = function () { api.cancel(); curLang = "it-IT"; };
+    /* sblocco iOS: un enunciato vuoto dentro un gesto abilita le voci successive */
+    api.unlock = function () {
+      if (!sysOk) return;
+      try { var u = new SpeechSynthesisUtterance(" "); u.volume = 0; window.speechSynthesis.speak(u); } catch (e) { /* non indispensabile */ }
+    };
+    api.feed = function (full, final) {
+      if (!api.can() || !cfg.on) return;
+      var s = String(full).replace(/```[\s\S]*?(```|$)/g, " ");
+      var avail = s.slice(cursor), cut = -1, m;
+      if (final) cut = avail.length;
+      else {
+        var re = /[.!?…:;](?=\s)|\n/g;
+        while ((m = re.exec(avail))) cut = m.index + 1;
+      }
+      if (cut <= 0) return;
+      var chunk = avail.slice(0, cut);
+      cursor += cut;
+      var t = clean(chunk);
+      if (!t) return;
+      if (spoken + t.length > 1100) return;
+      spoken += t.length;
+      queue(t);
+    };
+    api.say = function (text) { if (!api.can() || !cfg.on) return; queue(text); };
+    /* come say(), ma ritorna una promessa che si risolve quando JARVIS ha finito di parlare */
+    api.sayP = function (text, maxMs) {
+      if (!api.can() || !cfg.on) return Promise.resolve(false);
+      queue(text);
+      if (pending <= 0) return Promise.resolve(false);
+      return new Promise(function (res) {
+        var done = false, tm;
+        function fin(v) { if (done) return; done = true; clearTimeout(tm); res(v); }
+        tm = setTimeout(function () { fin(false); }, maxMs || 15000);
+        waiters.push(function () { fin(true); });
+      });
+    };
+    api.test = function () {
+      if (!api.can()) return;
+      elWarned = false;
+      api.cancel();
+      queue("Sistemi JARVIS attivi, " + state.name + ". Questa è la mia voce.");
+    };
+    api.save = function () {
+      store.set("voice", cfg.on); store.set("voiceUri", cfg.uri);
+      store.set("pitch", cfg.pitch); store.set("rate", cfg.rate);
+      store.set("elKey", cfg.elKey); store.set("elVoice", cfg.elVoice); store.set("elModel", cfg.elModel);
+    };
+    return api;
+  })();
+
+  /* ============================================================
+     Orecchie di JARVIS: riconoscimento vocale del browser (solo versione
+     autonoma: dentro Claude il microfono è bloccato dalla pagina ospitante).
+     Tre modi: "wake" (attende la frase di attivazione, continuo),
+     "cmd" (una richiesta alla volta) e "stop" (mentre parla JARVIS: solo «basta»).
+     ============================================================ */
+  var Ears = (function () {
+    var SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+    var ok = !!SR && STANDALONE;
+    var rec = null, active = false, mode = "", token = 0, t0 = 0;
+    var api = { ok: ok, why: ok ? "" : !STANDALONE ? "embedded" : "unsupported", onResult: noop, onEnd: noop, onError: noop, onState: noop };
+    api.mode = function () { return mode; };
+    api.active = function () { return active; };
+    api.start = function (m) {
+      if (!ok || active) return false;
+      try {
+        var r = new SR(), my = ++token;
+        rec = r;
+        r.lang = "it-IT";
+        r.interimResults = true;
+        r.continuous = (m === "wake" || m === "stop");
+        r.maxAlternatives = 1;
+        mode = m;
+        t0 = Date.now();
+        r.onstart = function () { if (my !== token) return; active = true; api.onState(); };
+        r.onresult = function (ev) {
+          if (my !== token) return;
+          var res = ev.results, n = res.length, last = n ? res[n - 1] : null, text = "", conf = 0, i;
+          if (!last) return;
+          if (m === "cmd") { for (i = 0; i < n; i++) text += res[i][0].transcript; }
+          else text = last[0].transcript;
+          conf = num(last[0].confidence, 0);
+          api.onResult(String(text).trim(), !!last.isFinal, conf, m);
+        };
+        r.onerror = function (ev) { if (my !== token) return; api.onError(ev && ev.error ? ev.error : "error", m); };
+        r.onend = function () {
+          if (my !== token) return;
+          active = false;
+          var d = Date.now() - t0, mm = mode;
+          mode = "";
+          api.onEnd(mm, d);
+          api.onState();
+        };
+        active = true;
+        r.start();
+        api.onState();
+        return true;
+      } catch (e) {
+        active = false; mode = "";
+        api.onError("start-failed", m);
+        return false;
+      }
+    };
+    api.stop = function () {
+      token++;
+      try { if (rec) rec.abort(); } catch (e) { /* già fermo */ }
+      rec = null; active = false; mode = "";
+      api.onState();
+    };
+    return api;
+  })();
+
+  /* ============================================================
+     Nucleo 3D: una sfera di vetro con dentro la rete neurale, anelli
+     giroscopici, reticolo e anelli HUD esterni. Si trascina per ruotarla.
+     La rete dipende solo dal numero di neuroni (seme fisso).
+     ============================================================ */
+  function mulberry(a) {
+    return function () {
+      a |= 0; a = (a + 0x6D2B79F5) | 0;
+      var t = Math.imul(a ^ (a >>> 15), 1 | a);
+      t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t;
+      return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+    };
+  }
+
+  var Net = (function () {
+    var bgEl = $("#bg"), cv = $("#neural"), g = cv.getContext("2d"), stageEl = $("#stage");
+    var reduce = !!(window.matchMedia && window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+    var TAU = Math.PI * 2, F = 4.2;
+    var ACC = [255, 59, 48], ICE = [255, 150, 130], DEEP = [130, 8, 16];
+    var rnd = mulberry(20261021);
+    var nodes = [{ x: 0, y: 0, z: 0, p: -1, d: 0, born: 0, ph: 0, kids: [], glow: 0 }];
+    var links = [], pulses = [];
+    var SX = new Float32Array(MAX_N + 8), SY = new Float32Array(MAX_N + 8), SZ = new Float32Array(MAX_N + 8), SS = new Float32Array(MAX_N + 8);
+    var SEGS = 56, SH = new Float32Array(9 * (SEGS + 1) * 3);
+    var W = 0, H = 0, dpr = 1, running = false, clock = 0, prev = 0, gridCv = null;
+    var mode = "standby", nextFire = 0, flash = 0, kickV = 0, power = 0.3, powerT = 0.3, spd = 0.25, lvl = 0, intro = false;
+    var yaw = 0.6, pitch = -0.28, vyaw = 0, vpitch = 0, drag = null;
+    var A = { a2: 0, a3: 0, a4: 0, a7: 0, sw: 0, g1: 0, g2: 0, g3: 0 };
+    var orb = [0, 1.3, 2.6, 3.9, 5.1];
+    var cxS = 0, cyS = 0, uS = 0;
+    var cyw = 1, syw = 0, cpi = 1, spi = 0, rx = 0, ry = 0, rz = 0;
+    var MODE_TXT = { standby: "Standby", idle: "In attesa", listen: "Ascolto", think: "Elaborazione", speak: "Risposta", error: "Errore", off: "Disattivato" };
+    var SPD = { standby: 0.25, idle: 1, listen: 1.7, think: 4.2, speak: 2.4, error: 1.3, off: 0.04 };
+    var LV = { standby: 0, idle: 0.05, listen: 0.1, think: 0.2, speak: 0.3, error: 0, off: 0 };
+    var FIRE = { standby: 4200, idle: 2400, listen: 480, think: 150, speak: 280, error: 650, off: 600000 };
+    var SEG = { standby: 280, idle: 200, listen: 150, think: 110, speak: 140, error: 200, off: 400 };
+    var ARC4 = [40, 22, 58, 30, 16, 52, 26, 44];
+    var GY = [{ r: 0.34, tx: 1.25, ty: 0.0, k: "g1" }, { r: 0.5, tx: 0.3, ty: 1.2, k: "g2" }, { r: 0.66, tx: 0.9, ty: 0.7, k: "g3" }];
+    var levelSrc = null, boost = 0, igT = 0, emb = [];
+
+    /* --- struttura della rete (in una palla di raggio 1) --- */
+    function dd(a, b) { return Math.hypot(a.x - b.x, a.y - b.y, a.z - b.z); }
+    function tooClose(x, y, z) {
+      for (var i = 0; i < nodes.length; i++) {
+        var n = nodes[i];
+        if (Math.hypot(x - n.x, y - n.y, z - n.z) < (i === 0 ? 0.2 : 0.085)) return true;
+      }
+      return false;
+    }
+    function pickParent() {
+      var ws = [], tot = 0, i, w, n, r;
+      for (i = 0; i < nodes.length; i++) {
+        n = nodes[i];
+        w = 1 / (1 + Math.pow(n.kids.length, 1.6)) * (i === 0 ? 3 : 1);
+        r = Math.hypot(n.x, n.y, n.z);
+        w *= 0.35 + Math.min(1, r) * 0.9;
+        ws.push(w); tot += w;
+      }
+      var t = rnd() * tot;
+      for (i = 0; i < ws.length; i++) { t -= ws[i]; if (t <= 0) return i; }
+      return 0;
+    }
+    function rvec() {
+      var z = rnd() * 2 - 1, a = rnd() * TAU, r = Math.sqrt(1 - z * z);
+      return [r * Math.cos(a), r * Math.sin(a), z];
+    }
+    function link(i) {
+      var n = nodes[i], best = -1, bd = 0.26, j, d;
+      for (j = 1; j < nodes.length - 1; j++) {
+        if (j === n.p) continue;
+        d = dd(n, nodes[j]);
+        if (d < bd) { bd = d; best = j; }
+      }
+      if (best > 0) links.push([i, best]);
+    }
+    function add(born) {
+      for (var tries = 0; tries < 80; tries++) {
+        var pi = pickParent(), par = nodes[pi], dir, rv = rvec();
+        if (par.p < 0) dir = rv;
+        else {
+          var pp = nodes[par.p], ix = par.x - pp.x, iy = par.y - pp.y, iz = par.z - pp.z, il = Math.hypot(ix, iy, iz) || 1;
+          var dx = ix / il + rv[0] * 0.9, dy = iy / il + rv[1] * 0.9, dz = iz / il + rv[2] * 0.9, dl = Math.hypot(dx, dy, dz) || 1;
+          dir = [dx / dl, dy / dl, dz / dl];
+        }
+        var len = 0.1 + rnd() * 0.14;
+        var x = par.x + dir[0] * len, y = par.y + dir[1] * len, z = par.z + dir[2] * len;
+        if (x * x + y * y + z * z > 0.9) continue;
+        if (tooClose(x, y, z)) continue;
+        nodes.push({ x: x, y: y, z: z, p: pi, d: par.d + 1, born: born, ph: rnd() * TAU, kids: [], glow: 0 });
+        par.kids.push(nodes.length - 1);
+        if (rnd() < 0.3) link(nodes.length - 1);
+        return true;
+      }
+      return false;
+    }
+    function growTo(count, animate) {
+      var k = 0;
+      while (nodes.length < count) {
+        if (!add(animate && !reduce ? clock + k * 260 : 0)) break;
+        k++;
+      }
+      if (animate && k) fireCore(1);
+      redraw();
+    }
+
+    /* --- impulsi --- */
+    function spawn(a, b, dir, s) {
+      if (reduce || pulses.length > 90) return;
+      pulses.push({ a: a, b: b, dir: dir, s: s, t0: clock, dur: SEG[mode] });
+    }
+    function cascade(i, s) {
+      var ks = nodes[i].kids;
+      for (var k = 0; k < ks.length; k++) {
+        var c = ks[k];
+        if (nodes[c].born <= clock && Math.random() < Math.min(1, s) * 0.92) spawn(i, c, 1, s * 0.93);
+      }
+    }
+    function fireCore(s) { flash = Math.max(flash, 1); nodes[0].glow = 1; cascade(0, s); }
+    function inward() {
+      var c = [], i;
+      for (i = 1; i < nodes.length; i++) if (!nodes[i].kids.length && nodes[i].born <= clock) c.push(i);
+      if (!c.length) return;
+      i = c[(Math.random() * c.length) | 0];
+      spawn(i, nodes[i].p, -1, 1);
+    }
+    function arrive(p) {
+      var n = nodes[p.b];
+      n.glow = 1;
+      if (p.dir > 0) { cascade(p.b, p.s); return; }
+      if (n.p >= 0) { spawn(p.b, n.p, -1, 1); return; }
+      flash = Math.max(flash, 0.8);
+      if (Math.random() < 0.7) fireCore(0.65);
+    }
+    function step(dt) {
+      var i, n;
+      for (i = 0; i < nodes.length; i++) { n = nodes[i]; if (n.glow > 0) n.glow = Math.max(0, n.glow - dt / 700); }
+      flash = Math.max(0, flash - dt / 600);
+      boost = Math.max(0, boost - dt / 3200);
+      if (!reduce) {
+        if (power > 0.45 && emb.length < 70 && Math.random() < dt * (0.006 + spd * 0.004 + boost * 0.03)) {
+          emb.push({ a: Math.random() * TAU, r: 1.02 + Math.random() * 0.1, v: 0.00004 + Math.random() * 0.00012, l: 0, life: 1800 + Math.random() * 2200, w: Math.random() < 0.5 ? 1 : -1 });
+        }
+        for (i = emb.length - 1; i >= 0; i--) {
+          var em = emb[i];
+          em.l += dt; em.r += em.v * dt * (1 + boost * 2); em.a += em.w * 0.00018 * dt;
+          if (em.l > em.life) emb.splice(i, 1);
+        }
+      }
+      kickV = Math.max(0, kickV - dt / 300);
+      power += (powerT - power) * Math.min(1, dt * 0.0022);
+      spd += (SPD[mode] - spd) * 0.05;
+      var ext = levelSrc ? levelSrc() : 0;
+      lvl += (LV[mode] + Math.max(kickV * 0.55, ext * 0.95, boost * 0.5) - lvl) * 0.14;
+      if (!drag) {
+        yaw += (vyaw + 0.00013 * (0.5 + spd * 0.35)) * dt;
+        pitch = clamp(pitch + vpitch * dt, -1.2, 1.2);
+        var dec = Math.pow(0.93, dt / 16);
+        vyaw *= dec; vpitch *= dec;
+      }
+      A.a2 -= dt * 0.00055 * spd; A.a3 += dt * 0.0006 * spd; A.a4 += dt * 0.00032 * spd;
+      A.a7 += dt * 0.00075 * spd; A.sw -= dt * 0.0011 * spd;
+      A.g1 += dt * 0.0007 * spd; A.g2 -= dt * 0.0005 * spd; A.g3 += dt * 0.0009 * spd;
+      for (i = 0; i < orb.length; i++) orb[i] += dt * spd * (0.00035 + 0.00012 * i) * (i % 2 ? -1 : 1);
+      for (i = pulses.length - 1; i >= 0; i--) {
+        var p = pulses[i];
+        if (clock >= p.t0 + p.dur) { pulses.splice(i, 1); arrive(p); }
+      }
+      if (clock >= nextFire) {
+        nextFire = clock + FIRE[mode] * (0.7 + Math.random() * 0.6);
+        if (mode === "listen" || ((mode === "idle" || mode === "standby") && Math.random() < 0.45)) inward();
+        else fireCore(mode === "idle" || mode === "standby" ? 0.8 : 1);
+      }
+    }
+
+    /* --- disegno --- */
+    function rgba(c, a) { return "rgba(" + c[0] + "," + c[1] + "," + c[2] + "," + (a < 0 ? 0 : a > 1 ? 1 : a).toFixed(3) + ")"; }
+    function ease(t) { t = clamp(t, 0, 1); return 1 - Math.pow(1 - t, 3); }
+    function prog(n) { return reduce ? 1 : ease((clock - n.born) / 900); }
+    function rot(x, y, z) {
+      var x1 = x * cyw + z * syw, z1 = -x * syw + z * cyw;
+      rx = x1; ry = y * cpi - z1 * spi; rz = y * spi + z1 * cpi;
+    }
+    function sizeCanvas() {
+      dpr = Math.min(window.devicePixelRatio || 1, 2);
+      cv.width = Math.round(W * dpr); cv.height = Math.round(H * dpr);
+      gridCv = document.createElement("canvas");
+      gridCv.width = cv.width; gridCv.height = cv.height;
+      var gg = gridCv.getContext("2d");
+      gg.setTransform(dpr, 0, 0, dpr, 0, 0);
+      gg.fillStyle = "rgba(255,59,48,0.075)";
+      for (var x = 12; x < W; x += 24) for (var y = 12; y < H; y += 24) gg.fillRect(x - 0.5, y - 0.5, 1, 1);
+      /* tracce di circuito ai margini */
+      var rg = mulberry(91731);
+      gg.strokeStyle = "rgba(255,59,48,0.14)"; gg.fillStyle = "rgba(255,59,48,0.22)"; gg.lineWidth = 1;
+      for (var kc = 0; kc < 16; kc++) {
+        var left = rg() < 0.5, dirc = left ? 1 : -1;
+        var x0 = left ? rg() * W * 0.16 : W - rg() * W * 0.16, y0 = rg() * H;
+        gg.beginPath(); gg.moveTo(x0, y0);
+        var stp = 3 + ((rg() * 3) | 0);
+        for (var sc = 0; sc < stp; sc++) {
+          var ln = 18 + rg() * 60;
+          if (sc % 2 === 0) x0 += dirc * ln; else y0 += (rg() < 0.5 ? -1 : 1) * ln * 0.8;
+          gg.lineTo(x0, y0);
+          if (rg() < 0.3) { x0 += dirc * 10; y0 += 10; gg.lineTo(x0, y0); }
+        }
+        gg.stroke();
+        gg.beginPath(); gg.arc(x0, y0, 2.4, 0, TAU); gg.fill();
+      }
+    }
+    function layout() {
+      var b = bgEl.getBoundingClientRect(), s = stageEl.getBoundingClientRect();
+      var w = Math.round(b.width), h = Math.round(b.height);
+      if (!w || !h || !s.width || !s.height) return false;
+      if (w !== W || h !== H) { W = w; H = h; sizeCanvas(); }
+      var tx = s.left - b.left + s.width / 2, ty = s.top - b.top + s.height / 2;
+      var tu = clamp(Math.min(s.width, s.height) / 2 / 3.75, 20, 80);
+      if (!uS) { cxS = tx; cyS = ty; uS = tu; }
+      else { cxS += (tx - cxS) * 0.25; cyS += (ty - cyS) * 0.25; uS += (tu - uS) * 0.25; }
+      return true;
+    }
+    function draw() {
+      if (!layout()) return;
+      var cx = cxS, cy = cyS, u = uS, Rs = u * 2.3, p = power, pp = 0.25 + 0.75 * p, na = 0.35 + 0.65 * p;
+      if (mode === "standby") pp *= 0.72 + 0.4 * (0.5 + 0.5 * Math.sin(clock * 0.0014));
+      else if (mode === "error") { var fk = 0.45 + 0.55 * Math.abs(Math.sin(clock * 0.009)); pp *= fk; na *= fk; }
+      pp = Math.min(1, pp + boost * 0.5);
+      var N = nodes.length, i, j, n, e, k, a0, rr;
+      g.setTransform(dpr, 0, 0, dpr, 0, 0);
+      g.globalCompositeOperation = "source-over";
+      g.fillStyle = "#050102";
+      g.fillRect(0, 0, W, H);
+      g.drawImage(gridCv, 0, 0, W, H);
+      g.globalCompositeOperation = "lighter";
+
+      cyw = Math.cos(yaw); syw = Math.sin(yaw); cpi = Math.cos(pitch); spi = Math.sin(pitch);
+
+      /* foschia di fondo */
+      var hz = g.createRadialGradient(cx, cy, 0, cx, cy, u * 5.4);
+      hz.addColorStop(0, rgba(DEEP, 0.5 * pp));
+      hz.addColorStop(0.5, rgba(DEEP, 0.2 * pp));
+      hz.addColorStop(1, rgba(DEEP, 0));
+      g.fillStyle = hz;
+      g.fillRect(0, 0, W, H);
+
+      /* onde d'urto dell'accensione */
+      if (igT) {
+        var tt = (performance.now() - igT) / 1600;
+        if (tt >= 1) igT = 0;
+        else {
+          for (var w = 0; w < 3; w++) {
+            var t2 = clamp(tt - w * 0.13, 0, 1);
+            if (t2 <= 0) continue;
+            g.lineWidth = 3 * (1 - t2) + 0.5;
+            g.strokeStyle = rgba(ACC, 0.75 * (1 - t2));
+            g.beginPath(); g.arc(cx, cy, u * 0.5 + u * 4.4 * ease(t2), 0, TAU); g.stroke();
+          }
+        }
+      }
+
+      /* anelli HUD esterni (piatti, rivolti allo schermo) */
+      function ap(q) { return ease((p - q * 0.07) / 0.55); }
+      function circle(r, lw, a) { g.lineWidth = lw; g.strokeStyle = rgba(ACC, a); g.beginPath(); g.arc(cx, cy, r, 0, TAU); g.stroke(); }
+      function ticks(r, cnt, len, major, every, rt, a) {
+        g.lineWidth = 1; g.strokeStyle = rgba(ACC, a);
+        g.beginPath();
+        for (var t = 0; t < cnt; t++) {
+          var an = rt + t * TAU / cnt, c = Math.cos(an), s = Math.sin(an), L = (t % every === 0) ? major : len;
+          g.moveTo(cx + c * r, cy + s * r); g.lineTo(cx + c * (r - L), cy + s * (r - L));
+        }
+        g.stroke();
+      }
+      if (typeof g.createConicGradient === "function") {
+        var cg = g.createConicGradient(A.sw, cx, cy);
+        cg.addColorStop(0, rgba(ACC, 0.2 * p));
+        cg.addColorStop(0.1, rgba(ACC, 0));
+        cg.addColorStop(1, rgba(ACC, 0));
+        g.fillStyle = cg;
+        g.beginPath(); g.arc(cx, cy, u * 3.0, 0, TAU); g.fill();
+      }
+      /* scanner e orbite */
+      k = ap(5); rr = u * 3.66 * (0.85 + 0.15 * k);
+      circle(rr, 1, 0.1 * k);
+      g.lineWidth = 2; g.strokeStyle = rgba(ACC, 0.5 * k);
+      g.beginPath(); g.arc(cx, cy, rr, A.a7, A.a7 + 1.75); g.stroke();
+      rr = u * 3.5 * (0.85 + 0.15 * k);
+      circle(rr, 1, 0.2 * k);
+      for (j = 0; j < orb.length; j++) {
+        a0 = orb[j];
+        var dirn = (j % 2 ? -1 : 1);
+        g.lineWidth = 1.4; g.strokeStyle = rgba(ACC, 0.35 * k);
+        g.beginPath(); g.arc(cx, cy, rr, dirn > 0 ? a0 - 0.45 : a0, dirn > 0 ? a0 : a0 + 0.45); g.stroke();
+        var ox = cx + Math.cos(a0) * rr, oy = cy + Math.sin(a0) * rr;
+        g.fillStyle = rgba(ACC, 0.22 * k); g.beginPath(); g.arc(ox, oy, 5, 0, TAU); g.fill();
+        g.fillStyle = rgba(ICE, k); g.beginPath(); g.arc(ox, oy, 2.1, 0, TAU); g.fill();
+      }
+      /* segmenti dati e marcatori */
+      k = ap(4); rr = u * 3.32 * (0.85 + 0.15 * k);
+      g.lineWidth = 2.4; g.strokeStyle = rgba(ACC, 0.7 * k);
+      for (j = 0; j < 8; j++) {
+        a0 = A.a4 + j * Math.PI / 4;
+        g.beginPath(); g.arc(cx, cy, rr, a0, a0 + ARC4[j] * Math.PI / 180); g.stroke();
+      }
+      g.fillStyle = rgba(ICE, 0.8 * k);
+      for (j = 0; j < 4; j++) {
+        var ta = j * Math.PI / 2, tc = Math.cos(ta), ts = Math.sin(ta), tr0 = u * 3.46, sz = u * 0.06;
+        g.beginPath();
+        g.moveTo(cx + tc * (tr0 - sz * 1.6), cy + ts * (tr0 - sz * 1.6));
+        g.lineTo(cx + tc * tr0 - ts * sz, cy + ts * tr0 + tc * sz);
+        g.lineTo(cx + tc * tr0 + ts * sz, cy + ts * tr0 - tc * sz);
+        g.closePath(); g.fill();
+      }
+      /* anello a trattini */
+      k = ap(3); rr = u * 3.14 * (0.85 + 0.15 * k);
+      g.setLineDash([2, 5]);
+      g.lineDashOffset = -A.a3 * rr;
+      circle(rr, 1.2, 0.4 * k);
+      g.setLineDash([]); g.lineDashOffset = 0;
+      /* archi spessi */
+      k = ap(2); rr = u * 2.96 * (0.85 + 0.15 * k);
+      circle(rr, 1, 0.16 * k);
+      g.lineWidth = Math.max(3, u * 0.07); g.strokeStyle = rgba(ACC, 0.85 * k);
+      for (j = 0; j < 3; j++) {
+        a0 = -A.a2 + j * TAU / 3;
+        g.beginPath(); g.arc(cx, cy, rr, a0, a0 + 1.47); g.stroke();
+      }
+      /* onda vocale */
+      k = ap(1);
+      var r0 = u * 2.56 * (0.85 + 0.15 * k), cnt = 96, lv = clamp(lvl, 0, 1);
+      g.lineWidth = 1.6; g.strokeStyle = rgba(ICE, 0.8 * k);
+      g.beginPath();
+      for (j = 0; j < cnt; j++) {
+        var an = j * TAU / cnt + A.a3 * 0.2;
+        var sh = Math.abs(Math.sin(j * 0.55 + clock * 0.0031 * (0.5 + spd * 0.4)) * Math.cos(j * 0.23 - clock * 0.0019));
+        var L = u * 0.014 + lv * u * 0.3 * (0.25 + 0.75 * sh);
+        g.moveTo(cx + Math.cos(an) * r0, cy + Math.sin(an) * r0);
+        g.lineTo(cx + Math.cos(an) * (r0 + L), cy + Math.sin(an) * (r0 + L));
+      }
+      g.stroke();
+      /* anello graduato appena fuori dalla sfera */
+      k = ap(0); rr = u * 2.46 * (0.85 + 0.15 * k);
+      circle(rr, 1, 0.45 * k);
+      ticks(rr, 120, u * 0.05, u * 0.1, 5, -A.a3, 0.5 * k);
+
+      /* ---- sfera 3D ---- */
+      var breath = 1 + (mode === "think" ? 0.012 * Math.sin(clock * 0.008) : 0.006 * Math.sin(clock * 0.0016));
+      var R3 = Rs * breath;
+      var body = g.createRadialGradient(cx, cy, 0, cx, cy, R3);
+      body.addColorStop(0, rgba(DEEP, 0.34 * pp));
+      body.addColorStop(1, rgba(DEEP, 0.07 * pp));
+      g.fillStyle = body;
+      g.beginPath(); g.arc(cx, cy, R3, 0, TAU); g.fill();
+
+      /* reticolo del guscio */
+      var idx = 0, a, b2;
+      for (b2 = 0; b2 < 9; b2++) {
+        for (a = 0; a <= SEGS; a++) {
+          var t = a * TAU / SEGS, x, y, z;
+          if (b2 < 4) { var lon = b2 * Math.PI / 4; x = Math.cos(t) * Math.cos(lon); y = Math.sin(t); z = Math.cos(t) * Math.sin(lon); }
+          else { var lat = (b2 - 6) * Math.PI / 6; x = Math.cos(lat) * Math.cos(t); y = Math.sin(lat); z = Math.cos(lat) * Math.sin(t); }
+          rot(x * 1.02, y * 1.02, z * 1.02);
+          var sc = F / (F - rz);
+          SH[idx++] = cx + rx * R3 * sc; SH[idx++] = cy + ry * R3 * sc; SH[idx++] = rz;
+        }
+      }
+      for (var pass = 0; pass < 2; pass++) {
+        g.strokeStyle = rgba(ACC, (pass ? 0.24 : 0.07) * na);
+        g.lineWidth = pass ? 1 : 0.8;
+        g.beginPath();
+        for (b2 = 0; b2 < 9; b2++) {
+          for (a = 0; a < SEGS; a++) {
+            var i0 = (b2 * (SEGS + 1) + a) * 3, zm = (SH[i0 + 2] + SH[i0 + 5]) / 2;
+            if ((zm >= 0) === !!pass) { g.moveTo(SH[i0], SH[i0 + 1]); g.lineTo(SH[i0 + 3], SH[i0 + 4]); }
+          }
+        }
+        g.stroke();
+        if (pass === 0) drawNet();
+      }
+
+      /* rete neurale dentro la sfera (disegnata tra il guscio posteriore e quello anteriore) */
+      function drawNet() {
+        var i1, nn, ee, jj;
+        for (i1 = 0; i1 < N; i1++) {
+          nn = nodes[i1];
+          var br = 1 + (i1 ? 0.012 * Math.sin(clock * 0.001 + nn.ph) : 0);
+          rot(nn.x * br, nn.y * br, nn.z * br);
+          var s2 = F / (F - rz);
+          SX[i1] = cx + rx * R3 * s2; SY[i1] = cy + ry * R3 * s2; SZ[i1] = rz; SS[i1] = s2;
+        }
+        var buckets = [[], [], []], partial = [];
+        for (i1 = 1; i1 < N; i1++) {
+          nn = nodes[i1]; ee = prog(nn);
+          if (ee <= 0) continue;
+          if (ee < 1) { partial.push(i1, ee); continue; }
+          var zm2 = (SZ[nn.p] + SZ[i1]) / 2;
+          buckets[zm2 < -0.33 ? 0 : zm2 < 0.33 ? 1 : 2].push(i1);
+        }
+        var BA = [0.13, 0.26, 0.45], BW = [0.8, 1, 1.25], bi;
+        for (bi = 0; bi < 3; bi++) {
+          g.lineWidth = BW[bi]; g.strokeStyle = rgba(ACC, BA[bi] * na);
+          g.beginPath();
+          for (jj = 0; jj < buckets[bi].length; jj++) {
+            i1 = buckets[bi][jj];
+            g.moveTo(SX[nodes[i1].p], SY[nodes[i1].p]); g.lineTo(SX[i1], SY[i1]);
+          }
+          g.stroke();
+        }
+        if (partial.length) {
+          g.lineWidth = 1; g.strokeStyle = rgba(ACC, 0.5 * na);
+          g.beginPath();
+          for (jj = 0; jj < partial.length; jj += 2) {
+            i1 = partial[jj]; ee = partial[jj + 1]; nn = nodes[i1];
+            g.moveTo(SX[nn.p], SY[nn.p]);
+            g.lineTo(SX[nn.p] + (SX[i1] - SX[nn.p]) * ee, SY[nn.p] + (SY[i1] - SY[nn.p]) * ee);
+          }
+          g.stroke();
+        }
+        if (links.length) {
+          g.setLineDash([2, 4]);
+          g.strokeStyle = rgba(ACC, 0.15 * na);
+          g.lineWidth = 1;
+          g.beginPath();
+          for (jj = 0; jj < links.length; jj++) {
+            if (prog(nodes[links[jj][0]]) < 1 || prog(nodes[links[jj][1]]) < 1) continue;
+            g.moveTo(SX[links[jj][0]], SY[links[jj][0]]);
+            g.lineTo(SX[links[jj][1]], SY[links[jj][1]]);
+          }
+          g.stroke();
+          g.setLineDash([]);
+        }
+        g.lineWidth = 1.7;
+        for (i1 = 1; i1 < N; i1++) {
+          nn = nodes[i1];
+          if (nn.glow <= 0.04 || prog(nn) < 1) continue;
+          g.strokeStyle = rgba(ACC, Math.min(0.9, nn.glow));
+          g.beginPath(); g.moveTo(SX[nn.p], SY[nn.p]); g.lineTo(SX[i1], SY[i1]); g.stroke();
+        }
+        for (i1 = 1; i1 < N; i1++) {
+          nn = nodes[i1]; ee = prog(nn);
+          if (ee <= 0) continue;
+          var da = 0.3 + 0.7 * (SZ[i1] + 1) / 2;
+          var r = (1.1 + Math.min(nn.kids.length, 4) * 0.3 + nn.glow * 1.8) * ee * SS[i1];
+          if (nn.glow > 0.15) {
+            g.fillStyle = rgba(ACC, nn.glow * 0.22);
+            g.beginPath(); g.arc(SX[i1], SY[i1], r * 3, 0, TAU); g.fill();
+          }
+          g.fillStyle = rgba(ACC, (0.45 + 0.55 * Math.min(1, nn.glow * 1.2)) * da * na);
+          g.beginPath(); g.arc(SX[i1], SY[i1], r, 0, TAU); g.fill();
+          if (nn.glow > 0.5) {
+            g.fillStyle = rgba(ICE, 0.9);
+            g.beginPath(); g.arc(SX[i1], SY[i1], r * 0.45, 0, TAU); g.fill();
+          }
+        }
+        for (jj = 0; jj < pulses.length; jj++) {
+          var pl = pulses[jj], ci = pl.dir > 0 ? pl.b : pl.a;
+          if (ci <= 0 || nodes[ci].p < 0) continue;
+          var par = nodes[ci].p, uu = clamp((clock - pl.t0) / pl.dur, 0, 1);
+          for (var tr = 0; tr < 3; tr++) {
+            var s0 = clamp((pl.dir > 0 ? uu : 1 - uu) - (pl.dir > 0 ? 1 : -1) * tr * 0.09, 0, 1);
+            var px = SX[par] + (SX[ci] - SX[par]) * s0, py = SY[par] + (SY[ci] - SY[par]) * s0;
+            var sz2 = SS[ci];
+            g.fillStyle = rgba(ACC, tr === 0 ? 0.28 : 0.12);
+            g.beginPath(); g.arc(px, py, (tr === 0 ? 5.5 : 3.5) * sz2, 0, TAU); g.fill();
+            g.fillStyle = rgba(ICE, tr === 0 ? 1 : 0.45);
+            g.beginPath(); g.arc(px, py, (tr === 0 ? 2.1 : 1.5) * sz2, 0, TAU); g.fill();
+          }
+        }
+      }
+
+      /* anelli giroscopici interni */
+      for (j = 0; j < 3; j++) {
+        var gr = GY[j], ang = A[gr.k] + gr.ty, ct = Math.cos(gr.tx), st = Math.sin(gr.tx), ca = Math.cos(ang), sa = Math.sin(ang);
+        var seg = 48, pts = [];
+        for (a = 0; a <= seg; a++) {
+          var th = a * TAU / seg, lx = gr.r * Math.cos(th), ly = gr.r * Math.sin(th), lz = 0;
+          var y1 = ly * ct - lz * st, z1 = ly * st + lz * ct;
+          var x2 = lx * ca + z1 * sa, z2 = -lx * sa + z1 * ca;
+          rot(x2, y1, z2);
+          var s3 = F / (F - rz);
+          pts.push(cx + rx * R3 * s3, cy + ry * R3 * s3, rz);
+        }
+        for (pass = 0; pass < 2; pass++) {
+          g.strokeStyle = rgba(ACC, (pass ? 0.8 : 0.3) * pp);
+          g.lineWidth = pass ? 1.6 : 1;
+          g.beginPath();
+          for (a = 0; a < seg; a++) {
+            var q0 = a * 3, zz = (pts[q0 + 2] + pts[q0 + 5]) / 2;
+            if ((zz >= 0) === !!pass) { g.moveTo(pts[q0], pts[q0 + 1]); g.lineTo(pts[q0 + 3], pts[q0 + 4]); }
+          }
+          g.stroke();
+        }
+        var bt = A[gr.k] * 3 + j * 2, bx0 = gr.r * Math.cos(bt), by0 = gr.r * Math.sin(bt);
+        var by1 = by0 * ct, bz1 = by0 * st, bx2 = bx0 * ca + bz1 * sa, bz2 = -bx0 * sa + bz1 * ca;
+        rot(bx2, by1, bz2);
+        var s4 = F / (F - rz), bxp = cx + rx * R3 * s4, byp = cy + ry * R3 * s4;
+        g.fillStyle = rgba(ACC, 0.3 * pp); g.beginPath(); g.arc(bxp, byp, 6 * s4, 0, TAU); g.fill();
+        g.fillStyle = rgba(ICE, pp); g.beginPath(); g.arc(bxp, byp, 2.4 * s4, 0, TAU); g.fill();
+      }
+
+      /* luce del nucleo */
+      var fl = flash, br2 = 1 + 0.05 * Math.sin(clock * (mode === "think" ? 0.008 : mode === "speak" ? 0.0045 : 0.0016));
+      var gl = g.createRadialGradient(cx, cy, 0, cx, cy, u * 1.7);
+      gl.addColorStop(0, rgba(ACC, (0.6 + fl * 0.3) * pp));
+      gl.addColorStop(0.3, rgba(ACC, 0.2 * pp));
+      gl.addColorStop(1, rgba(ACC, 0));
+      g.fillStyle = gl; g.beginPath(); g.arc(cx, cy, u * 1.7, 0, TAU); g.fill();
+      var cr = u * 0.36 * br2 * (1 + boost * 0.35);
+      var core = g.createRadialGradient(cx, cy, 0, cx, cy, cr * 1.5);
+      core.addColorStop(0, rgba([255, 214, 204], Math.min(1, pp + fl * 0.2)));
+      core.addColorStop(0.35, rgba(ICE, 0.95 * pp));
+      core.addColorStop(0.7, rgba(ACC, 0.7 * pp));
+      core.addColorStop(1, rgba(ACC, 0));
+      g.fillStyle = core; g.beginPath(); g.arc(cx, cy, cr * 1.5, 0, TAU); g.fill();
+
+      /* particelle: braci che si staccano dal nucleo */
+      for (j = 0; j < emb.length; j++) {
+        var eb = emb[j], ea = Math.min(1, eb.l / 350) * (1 - eb.l / eb.life) * 0.8 * na;
+        var ex = cx + Math.cos(eb.a) * Rs * eb.r * 1.05, ey = cy + Math.sin(eb.a) * Rs * eb.r * 0.9;
+        g.fillStyle = rgba(ICE, ea);
+        g.beginPath(); g.arc(ex, ey, 1.2 + 0.8 * (1 - eb.l / eb.life), 0, TAU); g.fill();
+      }
+
+      /* guscio anteriore e bordo di vetro */
+      for (pass = 1; pass < 2; pass++) {
+        g.strokeStyle = rgba(ACC, 0.24 * na); g.lineWidth = 1;
+        g.beginPath();
+        for (b2 = 0; b2 < 9; b2++) {
+          for (a = 0; a < SEGS; a++) {
+            var j0 = (b2 * (SEGS + 1) + a) * 3, zq = (SH[j0 + 2] + SH[j0 + 5]) / 2;
+            if (zq >= 0) { g.moveTo(SH[j0], SH[j0 + 1]); g.lineTo(SH[j0 + 3], SH[j0 + 4]); }
+          }
+        }
+        g.stroke();
+      }
+      var rim = g.createRadialGradient(cx, cy, R3 * 0.8, cx, cy, R3 * 1.08);
+      rim.addColorStop(0, rgba(ACC, 0));
+      rim.addColorStop(0.55, rgba(ACC, 0.05 * pp));
+      rim.addColorStop(0.86, rgba(ACC, 0.3 * pp));
+      rim.addColorStop(1, rgba(ACC, 0));
+      g.fillStyle = rim; g.beginPath(); g.arc(cx, cy, R3 * 1.08, 0, TAU); g.fill();
+      var lg = g.createLinearGradient(cx - u * 2.7, 0, cx + u * 2.7, 0);
+      lg.addColorStop(0, rgba(ACC, 0)); lg.addColorStop(0.5, rgba(ICE, 0.5 * pp)); lg.addColorStop(1, rgba(ACC, 0));
+      g.fillStyle = lg; g.fillRect(cx - u * 2.7, cy - 0.6, u * 5.4, 1.2);
+      g.globalCompositeOperation = "source-over";
+    }
+
+    function frame(ts) {
+      if (!running) return;
+      requestAnimationFrame(frame);
+      var dt = Math.min(50, ts - prev || 16);
+      prev = ts; clock = ts;
+      if (intro) {
+        for (var i = 0; i < nodes.length; i++) nodes[i].born = i ? clock + 200 + nodes[i].d * 140 : 0;
+        intro = false;
+      }
+      step(dt);
+      draw();
+    }
+    function redraw() { if (reduce) draw(); }
+
+    if (window.ResizeObserver) { var ro = new ResizeObserver(function () { redraw(); }); ro.observe(stageEl); ro.observe(bgEl); }
+    else window.addEventListener("resize", redraw);
+
+    /* trascinamento: ruota la sfera; un tocco breve è un "tap" */
+    stageEl.addEventListener("pointerdown", function (e) {
+      drag = { lx: e.clientX, ly: e.clientY, moved: 0, t: Date.now() };
+      vyaw = 0; vpitch = 0;
+      try { stageEl.setPointerCapture(e.pointerId); } catch (err) { /* non indispensabile */ }
+    });
+    stageEl.addEventListener("pointermove", function (e) {
+      if (!drag) return;
+      var dx = e.clientX - drag.lx, dy = e.clientY - drag.ly;
+      drag.lx = e.clientX; drag.ly = e.clientY;
+      drag.moved += Math.abs(dx) + Math.abs(dy);
+      if (drag.moved > 8) {
+        yaw += dx * 0.009;
+        pitch = clamp(pitch + dy * 0.009, -1.2, 1.2);
+        vyaw = dx * 0.0006; vpitch = dy * 0.0006;
+        redraw();
+      }
+    });
+    function endDrag(e, cancelled) {
+      if (!drag) return;
+      var d = drag;
+      drag = null;
+      if (!cancelled && d.moved <= 8 && Date.now() - d.t < 600 && api.onTap) api.onTap();
+    }
+    stageEl.addEventListener("pointerup", function (e) { endDrag(e, false); });
+    stageEl.addEventListener("pointercancel", function (e) { endDrag(e, true); });
+
+    var api = {
+      growTo: growTo,
+      intro: function () { if (!reduce) intro = true; },
+      kick: function () { kickV = 1; },
+      setLevelSource: function (fn) { levelSrc = fn; },
+      onTap: null,
+      setMode: function (m) {
+        if (!MODE_TXT[m]) return;
+        flag("mode", m);
+        if (m === mode) return;
+        mode = m;
+        nextFire = 0;
+        $("#mode-txt").textContent = MODE_TXT[m];
+        $("#mode-txt").classList.toggle("err", m === "error");
+        redraw();
+      },
+      mode: function () { return mode; },
+      power: function (on, dimmed) {
+        powerT = on ? 1 : dimmed ? 0.06 : 0.3;
+        if (on) { flash = 1.4; if (!reduce) { fireCore(1); fireCore(1); } else power = 1; }
+        else if (reduce) power = powerT;
+        redraw();
+      },
+      ignite: function () {
+        powerT = 1; boost = 1; flash = 1.6; igT = performance.now();
+        if (!reduce) { intro = true; fireCore(1); fireCore(1); fireCore(1); } else power = 1;
+        redraw();
+      },
+      active: function (on) {
+        if (on) {
+          if (reduce) { draw(); return; }
+          if (!running) { running = true; prev = 0; pulses.length = 0; requestAnimationFrame(frame); }
+        } else {
+          running = false;
+        }
+      },
+      stats: function () { return { neurons: nodes.length, synapses: nodes.length - 1 + links.length }; }
+    };
+    return api;
+  })();
+  Net.setLevelSource(function () { return Math.max(Voice.level(), Music.level() * 0.9); });
+
+  /* ---------- Navigazione: la schermata principale è il nucleo; il resto è un pannello ---------- */
+  var current = "console";
+  var TITLES = { history: "Cronologia", missions: "Attività", notes: "Memoria", tools: "Strumenti", systems: "Impostazioni" };
+  var lastPanel = TITLES[store.get("panel", "systems")] ? store.get("panel", "systems") : "systems";
+  function show(name) {
+    current = name;
+    $$(".view").forEach(function (v) { v.hidden = v.id !== "v-" + name; });
+    $$(".tab").forEach(function (t) { t.setAttribute("aria-selected", String(t.dataset.v === name)); });
+    var home = name === "console";
+    B.classList.toggle("panel", !home);
+    if (!home) {
+      lastPanel = name;
+      store.set("panel", name);
+      $("#panel-title").textContent = TITLES[name] || "";
+    }
+    $("#bg").hidden = !home;
+    Net.active(home);
+    if (name === "history") stick(true);
+    if (name === "systems") { renderVoiceList(); renderStatus(); renderMusicState(); }
+    if (name === "tools") renderTimers();
+  }
+  $$(".tab").forEach(function (t) { t.addEventListener("click", function () { show(t.dataset.v); }); });
+  $("#menu").addEventListener("click", function () { show(lastPanel); });
+  $("#panel-close").addEventListener("click", function () { show("console"); });
+  $("#open-hist").addEventListener("click", function () { show("history"); });
+
+  /* ---------- Telemetria e crescita della rete (solo una rappresentazione grafica) ---------- */
+  function renderTele() {
+    var s = Net.stats(), mm = memCount(), lat = state.latency == null ? "—" : (state.latency / 1000).toFixed(1) + " s";
+    var mic = Ears.ok ? (Ears.active() ? (Ears.mode() === "wake" ? "attesa" : "attivo") : "spento") : "tastiera";
+    $("#t-tl").innerHTML = "Rete<br><b>" + s.neurons + "</b> nodi<br><b>" + s.synapses + "</b> collegamenti";
+    $("#t-tr").innerHTML = "Livello <b>" + levelOf(state.mind.neurons) + "</b><br>Memoria <b>" + mm + "</b> " + (mm === 1 ? "fatto" : "fatti");
+    $("#t-bl").innerHTML = "Latenza <b>" + lat + "</b><br>Risposte <b>" + state.mind.exchanges + "</b>";
+    $("#t-br").innerHTML = "Voce <b>" + (Voice.can() && Voice.cfg.on ? (Voice.usingEl() ? "eleven" : "attiva") : "spenta") + "</b><br>Mic <b>" + mic + "</b>";
+  }
+  function learn(n) {
+    var before = levelOf(state.mind.neurons);
+    state.mind.neurons = Math.min(MAX_N, state.mind.neurons + n);
+    store.set("neurons", state.mind.neurons);
+    Net.growTo(state.mind.neurons, true);
+    renderTele();
+    renderStatus();
+    var after = levelOf(state.mind.neurons);
+    if (after > before) sysLine("Livello " + after + " raggiunto. La rappresentazione grafica della rete si è estesa.");
+  }
+
+  /* ---------- Sottotitoli: un riepilogo discreto ---------- */
+  var cap = $("#cap"), capUser = $("#cap-user"), capBody = $("#cap-body"), capSysEl = $("#cap-sys"), capTimer = null;
+  var capOverride = "";
+  function setCap(o) {
+    cap.classList.toggle("standby", !!o.standby);
+    cap.classList.toggle("err", !!o.err);
+    capUser.textContent = o.user ? "“" + clip(o.user, 110) + "”" : "";
+    if (o.text != null) capBody.textContent = o.text; else capBody.innerHTML = o.html || "";
+  }
+  function standbyText() {
+    if (state.core === "off") return "Nucleo disattivato. Lo riattivi in Impostazioni › Protocolli.";
+    if (Ears.ok) {
+      return wakeOn
+        ? "Dica «" + fmtPhrase(state.phrases[0]) + "» oppure tocchi il nucleo."
+        : "Tocchi «Attiva JARVIS». L'attivazione vocale si abilita con «Sveglia vocale».";
+    }
+    return STANDALONE
+      ? "Il riconoscimento vocale non è disponibile in questo browser. Tocchi «Attiva JARVIS» e usi la tastiera."
+      : "Dentro Claude il microfono è bloccato. Tocchi «Attiva JARVIS» e detti con la tastiera del telefono.";
+  }
+  function capFromHistory() {
+    if (!awake) { setCap({ standby: true, text: standbyText() }); return; }
+    if (capOverride) { setCap({ text: capOverride }); return; }
+    var i, lastUser = "", item = null;
+    for (i = state.msgs.length - 1; i >= 0; i--) {
+      var m = state.msgs[i];
+      if (m.r === "sys") continue;
+      if (!item) { item = m; if (m.r === "user") { lastUser = m.t; break; } continue; }
+      if (m.r === "user") { lastUser = m.t; break; }
+    }
+    if (!item) { setCap({ text: "Sono a sua disposizione." }); return; }
+    if (item.r === "err") setCap({ user: lastUser, text: item.t, err: true });
+    else if (item.r === "user") setCap({ user: item.t, html: '<span class="wait">In attesa di risposta…</span>' });
+    else setCap({ user: lastUser, html: md(item.t) });
+  }
+  function showSys(text) {
+    capSysEl.textContent = "▸ " + text;
+    clearTimeout(capTimer);
+    capTimer = setTimeout(function () { capSysEl.textContent = ""; }, 8000);
+  }
+
+  /* ---------- Cronologia ---------- */
+  var log = $("#log");
+  function stick(force) { if (force) log.scrollTop = log.scrollHeight; }
+  function msgEl(m) {
+    var d = document.createElement("div");
+    if (m.r === "sys") { d.className = "msg sys"; d.textContent = "▸ " + m.t; return { el: d }; }
+    d.className = "msg " + (m.r === "user" ? "user" : m.r === "err" ? "err" : "atlas");
+    var who = document.createElement("div");
+    who.className = "who";
+    who.textContent = m.r === "user" ? state.name : m.r === "err" ? "Avviso di sistema" : "JARVIS";
+    var body = document.createElement("div");
+    body.className = "body";
+    if (m.r === "atlas") body.innerHTML = md(m.t); else body.textContent = m.t;
+    d.appendChild(who); d.appendChild(body);
+    return { el: d, body: body };
+  }
+  function renderLog() {
+    log.textContent = "";
+    state.msgs.forEach(function (m) { log.appendChild(msgEl(m).el); });
+    stick(true);
+  }
+  function saveMsgs() { store.set("msgs", state.msgs.filter(function (m) { return m.r !== "err"; }).slice(-40)); }
+  function pushMsg(m) {
+    state.msgs.push(m);
+    log.appendChild(msgEl(m).el);
+    stick(true);
+    saveMsgs();
+  }
+  var pendingEl = null;
+  function greeting() {
+    state.msgs = [{ r: "atlas", local: true, t: "Sistemi JARVIS in linea, " + state.name + ". Può chiedermi qualsiasi cosa." }];
+    saveMsgs();
+  }
+  function sysLine(text) {
+    var m = { r: "sys", t: text };
+    state.msgs.push(m);
+    var el = msgEl(m).el;
+    if (pendingEl && pendingEl.parentNode === log) log.insertBefore(el, pendingEl); else log.appendChild(el);
+    saveMsgs();
+    showSys(text);
+  }
+
+  /* ---------- Errori ed elementi della schermata principale ---------- */
+  var q = $("#q"), sendBtn = $("#send"), face = $("#send-face"), stage = $("#stage");
+  var ICO_SEND = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><path d="M12 19V5M5 12l7-7 7 7"/></svg>';
+  var ICO_STOP = '<svg class="ico" viewBox="0 0 24 24" aria-hidden="true"><rect x="6" y="6" width="12" height="12" rx="2"/></svg>';
+  var ctl = null, coolTimer = null, autoTimer = null, typingOff = null;
+  var errState = "", errT = null, micBlocked = false, kbdOn = false, gateWake = false;
+
+  function setError(msg) {
+    errState = msg || "Errore";
+    clearTimeout(errT);
+    errT = setTimeout(function () { errState = ""; settle(); }, 9000);
+  }
+  function clearError() { errState = ""; clearTimeout(errT); }
+  function setFace(kind) { face.innerHTML = kind === "stop" ? ICO_STOP : kind === "send" ? ICO_SEND : esc(kind); }
+  setFace("send");
+
+  function netMode() {
+    if (state.core === "off") return "off";
+    if (errState) return "error";
+    if (!awake) return "standby";
+    if (Voice.busy()) return "speak";
+    if (state.busy) return state.streaming ? "speak" : "think";
+    if (activating) return "idle";
+    if ((Ears.active() && Ears.mode() === "cmd") || q.value.trim()) return "listen";
+    return "idle";
+  }
+  function micText() {
+    if (!Ears.ok) {
+      return ["na", STANDALONE ? "Riconoscimento vocale non supportato da questo browser" : "Microfono non disponibile in questa vista"];
+    }
+    if (micBlocked) return ["na", "Microfono non autorizzato"];
+    if (Ears.active()) {
+      if (Ears.mode() === "wake") return ["wake", "In ascolto: «" + fmtPhrase(state.phrases[0]) + "»"];
+      if (Ears.mode() === "stop") return ["live", "Microfono attivo (solo «basta»)"];
+      return ["live", "Microfono attivo"];
+    }
+    if (gateWake) return ["off", "Un tocco per abilitare il microfono"];
+    return ["off", "Microfono spento"];
+  }
+  function renderUI() {
+    var m = netMode(), off = state.core === "off";
+    var sub = off ? "Nucleo disattivato"
+      : m === "error" ? "Errore di sistema"
+      : !awake ? "In attesa del comando"
+      : activating ? "Sistemi in avvio…"
+      : m === "speak" ? "Risposta in corso"
+      : m === "think" ? "Elaborazione in corso"
+      : m === "listen" ? "La ascolto"
+      : Ears.ok ? (convoOn ? "Può parlare" : "Ascolto in pausa") : "Scriva o detti";
+    $("#sub-txt").textContent = sub;
+    var mt = micText(), mi = $("#micind");
+    mi.dataset.s = mt[0];
+    $("#mic-txt").textContent = mt[1];
+
+    var act = $("#act");
+    act.disabled = off;
+    act.classList.toggle("live", awake && !activating && Ears.ok && Ears.active());
+    act.textContent = off ? "Nucleo disattivato"
+      : !awake ? "Attiva JARVIS"
+      : activating ? "Avvio in corso · tocchi per saltare"
+      : Ears.ok ? (Ears.active() && Ears.mode() === "cmd" ? "Microfono attivo · pausa" : convoOn ? "Ascolto in preparazione…" : "Tocchi per parlare")
+      : "Scriva o detti";
+    $("#wakebtn").hidden = !(STANDALONE && Ears.ok) || off;
+    $("#wakebtn").setAttribute("aria-pressed", String(wakeOn));
+    $("#wakebtn").textContent = "Sveglia vocale: " + (wakeOn ? "on" : "off");
+    $("#stopv").hidden = !Voice.busy();
+    $("#stopm").hidden = !Music.playing();
+    $("#sleep").hidden = !awake;
+    $("#kbd").hidden = !awake || !Ears.ok;
+    $("#kbd").setAttribute("aria-pressed", String(kbdOn));
+    B.classList.toggle("kbd", awake && (kbdOn || !Ears.ok || micBlocked));
+    B.classList.toggle("awake", awake);
+    flag("awake", awake ? "1" : "0");
+    flag("ears", Ears.active() ? Ears.mode() : "off");
+    flag("mic", mt[0]);
+    renderHint();
+    if (!awake) capFromHistory();
+  }
+  function settle() {
+    Net.setMode(netMode());
+    renderUI();
+    renderTele();
+  }
+  function renderHint() {
+    var h = $("#hintline"), info = Music.info();
+    if (awake) { h.hidden = true; return; }
+    var t;
+    if (!Music.cfg.on) t = "Musica automatica: disattivata.";
+    else if (info && info.bad) t = "Musica: il file scelto non è riproducibile.";
+    else if (info) t = "Musica di attivazione: " + clip(info.name, 36);
+    else t = "Musica di attivazione non configurata: la scelga in Impostazioni.";
+    h.textContent = t;
+    h.hidden = false;
+  }
+
+  function setBusy(b) {
+    state.busy = b;
+    sendBtn.classList.toggle("stop", b);
+    sendBtn.setAttribute("aria-label", b ? "Interrompi" : "Invia");
+    setFace(b ? "stop" : "send");
+    settle();
+  }
+  function cooldown(sec) {
+    clearInterval(coolTimer);
+    var left = sec;
+    sendBtn.disabled = true;
+    setFace(left + "");
+    coolTimer = setInterval(function () {
+      left--;
+      if (left <= 0) {
+        clearInterval(coolTimer);
+        coolTimer = null;
+        sendBtn.disabled = false;
+        setFace("send");
+      } else {
+        setFace(left + "");
+      }
+    }, 1000);
+  }
+  function autosize() { q.style.height = "auto"; q.style.height = Math.min(q.scrollHeight, 110) + "px"; }
+
+  function disarm() { clearTimeout(autoTimer); autoTimer = null; sendBtn.classList.remove("arming"); }
+  function arm() {
+    disarm();
+    if (STANDALONE && Ears.ok) return;
+    if (!state.auto || state.busy || coolTimer || q.value.trim().length < 3) return;
+    sendBtn.style.setProperty("--auto", state.auto + "s");
+    void sendBtn.offsetWidth;
+    sendBtn.classList.add("arming");
+    autoTimer = setTimeout(function () { disarm(); send(q.value); }, state.auto * 1000);
+  }
+  q.addEventListener("input", function () { autosize(); Net.kick(); settle(); arm(); });
+  q.addEventListener("focus", function () { clearTimeout(typingOff); $("#app").classList.add("typing"); });
+  q.addEventListener("blur", function () {
+    clearTimeout(typingOff);
+    typingOff = setTimeout(function () { $("#app").classList.remove("typing"); }, 350);
+  });
+  q.addEventListener("keydown", function (e) {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); disarm(); send(q.value); }
+  });
+
+  /* ---------- Richiesta unica di interazione (autoplay / microfono) ---------- */
+  var gate = $("#gate"), gateReason = "", gateUsed = {};
+  function showGate(reason) {
+    if (gateUsed[reason]) return false;
+    gateUsed[reason] = true;
+    gateReason = reason;
+    $("#gate-t").textContent = reason === "wake"
+      ? "Per ascoltare «" + fmtPhrase(state.phrases[0]) + "» il browser richiede un tocco: abilita microfono e audio. Succede una volta sola."
+      : "Il browser richiede un tocco per abilitare l'audio. Succede una volta sola.";
+    $("#gate-go").textContent = reason === "wake" ? "Abilita" : "Abilita audio";
+    $("#gate-no").hidden = reason !== "wake";
+    gate.hidden = false;
+    flag("gate", reason);
+    try { $("#gate-go").focus(); } catch (e) { /* non indispensabile */ }
+    return true;
+  }
+  function hideGate() { gate.hidden = true; flag("gate", "none"); }
+  function unlockAll() { Aud.unlock(); Music.bless(); Voice.unlock(); }
+
+  /* ============================================================
+     Attivazione cinematografica, ascolto e comandi vocali locali
+     ============================================================ */
+  var actId = 0, introHold = false, bootT = null, silentRuns = 0, quickEnds = 0, errRuns = 0, micT = null;
+  var musicBlockedAct = 0, micWhy = "";
+
+  function greet() {
+    var h = new Date().getHours();
+    return h >= 5 && h < 13 ? "Buongiorno" : h >= 13 && h < 18 ? "Buon pomeriggio" : "Buonasera";
+  }
+  function welcomeText() {
+    return "Sistemi online. " + greet() + ", " + state.name + ". " + (Ears.ok ? "La ascolto." : "Sono a sua disposizione.");
+  }
+  function bootReset() {
+    var el = $("#boot");
+    el.classList.remove("out");
+    el.innerHTML = "";
+    clearTimeout(bootT);
+    B.classList.add("booting");
+    bootT = setTimeout(function () { el.classList.add("out"); B.classList.remove("booting"); }, 4600);
+  }
+  function bootLine(text, delay) {
+    var el = $("#boot"), d = document.createElement("div");
+    d.textContent = text;
+    d.style.animationDelay = (delay || 0) + "ms";
+    el.appendChild(d);
+  }
+
+  /* Musica e voce non si sovrappongono: piena durante l'introduzione, bassa mentre JARVIS parla,
+     "di sottofondo" durante la conversazione. */
+  function musicPolicy() {
+    if (!Music.playing()) return;
+    var k = !awake ? "full" : introHold ? "full" : Voice.busy() ? "voice" : "bed";
+    Music.mode(k, k === "voice" ? 0.35 : 0.9);
+  }
+  function musicMsg(r) {
+    switch (r) {
+      case "nofile": return "Non c'è alcun file musicale configurato, " + state.name + ". Lo scelga in Impostazioni.";
+      case "blocked": return "Il browser blocca l'audio. Tocchi lo schermo e riprovi.";
+      case "error": return "Il file musicale non è riproducibile.";
+      case "already": return "La musica è già in riproduzione, " + state.name + ".";
+      case "off": return "La musica automatica è disattivata.";
+      default: return "Musica avviata, " + state.name + ".";
+    }
+  }
+
+  async function activate(src) {
+    if (awake || activating) return;
+    if (state.core === "off") { showSys("Nucleo disattivato. Lo riattivi in Impostazioni › Protocolli."); return; }
+    var my = ++actId;
+    activating = true; awake = true; introHold = true; convoOn = true;
+    clearError(); micBlocked = false; micWhy = ""; silentRuns = 0; quickEnds = 0; errRuns = 0;
+    capOverride = "Avvio dei sistemi in corso…";
+    Net.power(true);
+    Net.ignite();
+    Sfx.boot();
+    bootReset();
+    bootLine("Nucleo ▸ online", 0);
+    bootLine("Rete neurale ▸ sincronizzata", 350);
+    flag("act", src || "");
+    syncMic();          /* ferma l'attesa della frase: durante la presentazione il microfono è chiuso */
+    settle();
+    capFromHistory();
+
+    var res = await Music.start();
+    if (my !== actId) return;
+    flag("musicres", res);
+    var ml = { started: "Audio ▸ in riproduzione", nofile: "Audio ▸ file non configurato", off: "Audio ▸ disattivato", blocked: "Audio ▸ bloccato dal browser", error: "Audio ▸ file non valido" }[res];
+    if (ml) bootLine(ml, 700);
+    if (res === "nofile") showSys("Musica non configurata: scelga un file in Impostazioni › Attivazione e musica.");
+    else if (res === "error") showSys("Il file musicale non è riproducibile.");
+    else if (res === "blocked") {
+      musicBlockedAct = my;
+      if (!showGate("music")) showSys("Il browser blocca ancora l'audio. Provi «Prova la musica» in Impostazioni.");
+    }
+    renderUI();
+    await wait(res === "started" ? INTRO_MS : 500);
+    if (my !== actId) return;
+
+    bootLine(Voice.can() && Voice.cfg.on ? "Voce ▸ pronta" : "Voce ▸ disattivata", 0);
+    introHold = false;
+    Music.mode("voice", 0.35);
+    capOverride = welcomeText();
+    capFromHistory();
+    await Voice.sayP(welcomeText());
+    if (my !== actId) return;
+    activating = false; introHold = false;
+    capOverride = Ears.ok ? "La ascolto." : "Sono a sua disposizione.";
+    capFromHistory();
+    musicPolicy();
+    syncMic();
+    settle();
+  }
+  /* attivazione senza sequenza (per esempio se si scrive a JARVIS mentre è in standby) */
+  function silentWake() {
+    if (awake) return;
+    actId++;
+    awake = true; activating = false; introHold = false; convoOn = Ears.ok;
+    Net.power(true);
+    capOverride = "";
+    syncMic();
+    settle();
+  }
+  function sleepNow(note) {
+    actId++;
+    awake = false; activating = false; introHold = false; convoOn = false;
+    if (ctl) ctl.abort();
+    Voice.cancel();
+    Music.stop(0.9);
+    disarm();
+    q.value = ""; autosize();
+    Net.power(false, state.core === "off");
+    capOverride = "";
+    clearTimeout(bootT);
+    B.classList.remove("booting");
+    $("#boot").innerHTML = "";
+    if (note) showSys(note);
+    syncMic();
+    settle();
+  }
+  function retryMusic() {
+    if (!awake || musicBlockedAct !== actId) return;
+    Music.start().then(function (r) {
+      flag("musicres", r);
+      if (r === "started") { musicPolicy(); bootLine("Audio ▸ in riproduzione", 0); renderUI(); }
+      else if (r === "blocked") showSys("Il browser continua a bloccare l'audio. Provi «Prova la musica» in Impostazioni.");
+    });
+  }
+
+  /* ---------- Gestione del microfono: un solo punto decide che cosa ascoltare ---------- */
+  function desiredEars() {
+    if (!Ears.ok || state.core === "off" || document.hidden || micBlocked || gateWake) return "";
+    if (!awake) return wakeOn ? "wake" : "";
+    if (activating || state.busy) return "";
+    if (Voice.busy()) return state.barge && convoOn ? "stop" : "";
+    return convoOn ? "cmd" : "";
+  }
+  function syncMic() {
+    clearTimeout(micT);
+    var want = desiredEars(), have = Ears.active() ? Ears.mode() : "";
+    if (want === have) { settle(); return; }
+    if (have) Ears.stop();
+    if (!want) { settle(); return; }
+    function go() {
+      if (desiredEars() !== want || Ears.active()) { settle(); return; }
+      if (Ears.start(want) && want === "cmd") Sfx.listen();
+      settle();
+    }
+    /* avvio immediato se possibile: su iPhone deve restare dentro il gesto dell'utente */
+    if (have) micT = setTimeout(go, 180); else go();
+  }
+
+  var STOPRE = /\b(basta|stop|fermati|ferma|zitto|silenzio|taci)\b/;
+  Ears.onState = function () { settle(); };
+  Ears.onResult = function (text, isFinal, conf, m) {
+    errRuns = 0;
+    if (m === "wake") {
+      if (!awake && !activating && matchWake(text)) activate("voce");
+      return;
+    }
+    if (m === "stop") {
+      if (STOPRE.test(norm(text))) { Voice.cancel(); showSys("Voce interrotta."); }
+      return;
+    }
+    if (!isFinal) { capUser.textContent = clip(text, 110); Net.kick(); settle(); return; }
+    silentRuns = 0;
+    capUser.textContent = "";
+    handleUtterance(text, conf);
+  };
+  Ears.onError = function (code) {
+    if (code === "no-speech" || code === "aborted") return;
+    var msg;
+    if (code === "not-allowed" || code === "service-not-allowed") {
+      micBlocked = true; micWhy = "Microfono non autorizzato";
+      msg = "Microfono non autorizzato. Lo consenta nelle impostazioni del browser per questo sito, oppure usi la tastiera.";
+    } else if (code === "audio-capture") {
+      micBlocked = true; micWhy = "Nessun microfono disponibile";
+      msg = "Nessun microfono disponibile.";
+    } else if (code === "language-not-supported") {
+      micBlocked = true; micWhy = "Lingua non supportata dal riconoscimento";
+      msg = "Il riconoscimento vocale di questo browser non supporta l'italiano.";
+    } else if (code === "network") {
+      errRuns++;
+      msg = "Il riconoscimento vocale non è raggiungibile: controlli la rete.";
+      if (errRuns >= 3) { micBlocked = true; micWhy = "Riconoscimento vocale non raggiungibile"; }
+    } else {
+      errRuns++;
+      msg = "Riconoscimento vocale interrotto.";
+      if (errRuns >= 4) { micBlocked = true; micWhy = "Riconoscimento vocale instabile"; }
+    }
+    showSys(msg);
+    if (micBlocked) {
+      convoOn = false;
+      setError(msg);
+      if (!state.busy) { capOverride = ""; setCap({ text: msg, err: true }); }
+      pushMsg({ r: "err", t: msg });
+    }
+    settle();
+  };
+  Ears.onEnd = function (m, dur) {
+    quickEnds = dur < 900 ? quickEnds + 1 : 0;
+    if (m === "cmd" && convoOn && awake && !state.busy && !Voice.busy()) {
+      silentRuns++;
+      if (silentRuns >= 5) {
+        convoOn = false;
+        showSys("Microfono in pausa: nessuna voce rilevata. Tocchi il nucleo per riprendere.");
+        settle();
+        return;
+      }
+    }
+    if (quickEnds >= 12) {
+      micBlocked = true; micWhy = "Riconoscimento vocale instabile";
+      setError("Riconoscimento vocale instabile");
+      showSys("Il riconoscimento vocale si interrompe di continuo. Uso manuale: tocchi il nucleo.");
+      settle();
+      return;
+    }
+    clearTimeout(micT);
+    micT = setTimeout(syncMic, quickEnds >= 3 ? 2000 : 250);
+    settle();
+  };
+
+  /* ---------- Interpretazione di ciò che dice l'utente ---------- */
+  function isEcho(text) {
+    var w = norm(text).split(" ").filter(function (x) { return x.length > 2; });
+    if (w.length < 2) return false;
+    var spoken = " " + Voice.recent().map(norm).join(" ") + " ", hit = 0;
+    w.forEach(function (x) { if (spoken.indexOf(" " + x + " ") >= 0) hit++; });
+    return hit / w.length >= 0.7;
+  }
+  function handleUtterance(text, conf) {
+    var raw = String(text).trim();
+    if (!raw) return;
+    if (isEcho(raw)) { showSys("Ignorato: era la voce di JARVIS."); return; }
+    if (Music.playing() && conf > 0 && conf < 0.5) { showSys("Audio poco chiaro con la musica in corso: ignorato."); return; }
+    var w = matchWake(raw);
+    if (w) {
+      var rest = wnorm(raw).replace(wnorm(w), " ").trim().split(" ").filter(Boolean);
+      if (rest.length < 2) { showSys("Sono già attivo, " + state.name + "."); return; }
+    }
+    if (intent(raw)) return;
+    send(raw);
+  }
+  function localTurn(user, answer) {
+    pushMsg({ r: "user", t: user });
+    pushMsg({ r: "atlas", t: answer, local: true });
+    capOverride = "";
+    setCap({ user: user, html: md(answer) });
+    Voice.reset();
+    Voice.say(answer);
+    state.mind.exchanges++;
+    store.set("exchanges", state.mind.exchanges);
+    learn(2);
+    settle();
+  }
+
+  var NUMW = { un: 1, uno: 1, una: 1, due: 2, tre: 3, quattro: 4, cinque: 5, sei: 6, sette: 7, otto: 8, nove: 9, dieci: 10, undici: 11, dodici: 12, tredici: 13, quattordici: 14, quindici: 15, venti: 20, venticinque: 25, trenta: 30, quaranta: 40, quarantacinque: 45, cinquanta: 50, sessanta: 60 };
+  function parseDuration(t) {
+    var ms = 0, m;
+    if (/\bmezz ora\b|\bmezzora\b|\bmezza ora\b/.test(t)) ms += 30 * 60000;
+    if (/\bquarto d ora\b/.test(t)) ms += 15 * 60000;
+    var re = /\b(\d+|un|uno|una|due|tre|quattro|cinque|sei|sette|otto|nove|dieci|undici|dodici|tredici|quattordici|quindici|venti|venticinque|trenta|quaranta|quarantacinque|cinquanta|sessanta)\s*(second[oi]|minut[oi]|or[ae])\b/g;
+    while ((m = re.exec(t))) {
+      var v = /^\d+$/.test(m[1]) ? Number(m[1]) : NUMW[m[1]];
+      var u = m[2].charAt(0) === "s" ? 1000 : m[2].charAt(0) === "m" ? 60000 : 3600000;
+      ms += v * u;
+    }
+    return ms > 0 && ms <= 24 * 3600000 ? ms : 0;
+  }
+  function cityFrom(t) {
+    var m = t.match(/\b(?:a|ad|di|per|in|su|da)\s+([a-z' ]{2,40}?)(?:\s+(?:oggi|domani|adesso|ora|stasera|stamattina|dopodomani))?$/);
+    if (!m) return "";
+    var c = m[1].trim();
+    if (/^(questo|quel|questa|mattina|sera|pomeriggio|momento|ora|adesso|oggi|domani|weekend|settimana|generale|tutto)/.test(c)) return "";
+    return c;
+  }
+  var MODEWORDS = [
+    [/\b(quotidiano|assistente|giornaliero)\b/, "daily"], [/\b(studio|studiare|apprendimento)\b/, "study"],
+    [/\b(programmazione|codice|programmare|sviluppo)\b/, "code"], [/\b(ricerca|analisi)\b/, "research"],
+    [/\b(organizzazione|produttivita)\b/, "work"], [/\b(traduzione|traduttore)\b/, "translate"],
+    [/\b(scrittura|scrivere)\b/, "write"]
+  ];
+  function setMode(k) {
+    if (!MODES[k]) return;
+    state.mode = k;
+    store.set("mode", k);
+    renderSeg("seg-mode", k);
+  }
+
+  function intent(raw) {
+    var t = wnorm(raw).trim().replace(/^jarvis /, "").replace(/ jarvis$/, "");
+    if (!t) return true;
+    var n = state.name, words = t.split(" ").length;
+
+    if (/^(basta|stop|fermati|ferma|zitto|silenzio|taci|ok basta|basta cosi)$/.test(t)) {
+      if (Voice.busy()) { Voice.cancel(); showSys("Voce interrotta."); }
+      else if (Music.playing()) { Music.stop(); localTurn(raw, "Musica interrotta, " + n + "."); }
+      return true;
+    }
+    if (/\b(annulla|cancella|ferma|elimina|togli)\b.*\btimer\b/.test(t)) {
+      var k = timers.length;
+      timers.length = 0; renderTimers();
+      localTurn(raw, k ? "Timer annullati, " + n + "." : "Nessun timer attivo, " + n + ".");
+      return true;
+    }
+    if ((/\b(ferma|fermare|spegni|spegnere|interrompi|interrompere|togli|togliere|stoppa|silenzia|basta|stop|pausa)\b.*\b(musica|canzone|brano|audio|musichetta)\b/.test(t) ||
+         /\b(musica|canzone|brano)\b.*\b(basta|stop|off|spenta|spegni|ferma|fermati|pausa)\b/.test(t)) && words <= 9) {
+      var was = Music.stop();
+      localTurn(raw, was ? "Musica interrotta, " + n + "." : "Nessuna musica in riproduzione, " + n + ".");
+      return true;
+    }
+    if (/\b(fai partire|fai ripartire|metti|avvia|riprendi|riproduci|accendi|suona|riavvia|rimetti)\b.*\b(musica|canzone|brano|back in black|ac dc|acdc)\b/.test(t)) {
+      Music.start({ force: true }).then(function (r) {
+        flag("musicres", r);
+        if (r === "started") musicPolicy();
+        if (r === "blocked") { musicBlockedAct = actId; showGate("music"); }
+        localTurn(raw, musicMsg(r));
+      });
+      return true;
+    }
+    if (/\b(alza|aumenta|piu forte)\b.*\b(musica|volume)\b/.test(t) || /\b(abbassa|diminuisci|riduci|piu piano)\b.*\b(musica|volume)\b/.test(t)) {
+      var up = /\b(alza|aumenta|piu forte)\b/.test(t);
+      Music.setVol(Music.cfg.vol + (up ? 0.15 : -0.15));
+      renderMusicState();
+      localTurn(raw, "Volume della musica al " + Math.round(Music.cfg.vol * 100) + " per cento, " + n + ".");
+      return true;
+    }
+    if (words <= 6 && /\b(standby|spegniti|disattivati|vai a dormire|a dormire|buonanotte|riposati)\b/.test(t)) {
+      pushMsg({ r: "user", t: raw });
+      Voice.reset();
+      Voice.sayP("Sistemi in standby, " + n + ".").then(function () { sleepNow(); });
+      return true;
+    }
+    var mm = t.match(/\bmodalita\s+(.+)$/);
+    if (mm) {
+      for (var i = 0; i < MODEWORDS.length; i++) {
+        if (MODEWORDS[i][0].test(mm[1])) {
+          setMode(MODEWORDS[i][1]);
+          localTurn(raw, "Modalità " + MODES[MODEWORDS[i][1]][0].toLowerCase() + " attiva, " + n + ".");
+          return true;
+        }
+      }
+    }
+    if (/\b(timer|conto alla rovescia|avvisami tra|ricordami tra|sveglia tra)\b/.test(t)) {
+      var ms = parseDuration(t);
+      if (ms) { addTimer(ms); localTurn(raw, "Timer impostato: " + fmtDur(ms) + ", " + n + "."); }
+      else localTurn(raw, "Non ho capito la durata del timer, " + n + ". Dica per esempio «timer di cinque minuti».");
+      return true;
+    }
+    if (/\b(meteo|che tempo fa|previsioni|temperatura|che tempo c e)\b/.test(t) && words <= 12) {
+      weatherTurn(raw, t);
+      return true;
+    }
+    return false;
+  }
+
+  /* ---------- Controlli della schermata principale ---------- */
+  function stageTap() {
+    micBlocked = false; micWhy = ""; errRuns = 0; quickEnds = 0;
+    unlockAll();
+    if (state.core === "off") { showSys("Nucleo disattivato."); return; }
+    if (!awake) { activate("tocco"); return; }
+    if (activating) { Voice.cancel(); return; }
+    if (Voice.busy()) { Voice.cancel(); convoOn = Ears.ok; silentRuns = 0; syncMic(); return; }
+    if (state.busy) return;
+    if (Ears.ok) { convoOn = !convoOn; silentRuns = 0; syncMic(); }
+    else { kbdOn = true; renderUI(); try { q.focus(); } catch (e) { /* non indispensabile */ } }
+  }
+  Net.onTap = stageTap;
+  stage.addEventListener("keydown", function (e) { if (e.key === "Enter" || e.key === " ") { e.preventDefault(); stageTap(); } });
+  $("#act").addEventListener("click", stageTap);
+  $("#wakebtn").addEventListener("click", function () {
+    unlockAll();
+    micBlocked = false; micWhy = ""; errRuns = 0; quickEnds = 0; gateWake = false;
+    wakeOn = !wakeOn;
+    store.set("wake", wakeOn);
+    renderSeg("seg-wake", wakeOn ? "on" : "off");
+    syncMic();
+  });
+  $("#stopv").addEventListener("click", function () { Voice.cancel(); syncMic(); });
+  $("#stopm").addEventListener("click", function () { Music.stop(); showSys("Musica interrotta."); });
+  $("#sleep").addEventListener("click", function () { sleepNow("Sistemi in standby."); });
+  $("#kbd").addEventListener("click", function () {
+    kbdOn = !kbdOn; renderUI();
+    if (kbdOn) { try { q.focus(); } catch (e) { /* non indispensabile */ } }
+  });
+  $("#gate-go").addEventListener("click", function () {
+    var r = gateReason;
+    unlockAll();
+    hideGate();
+    if (r === "wake") { gateWake = false; wakeOn = true; store.set("wake", true); micBlocked = false; syncMic(); }
+    else if (r === "music") retryMusic();
+    renderUI();
+  });
+  $("#gate-no").addEventListener("click", function () {
+    hideGate();
+    gateWake = false; wakeOn = false; store.set("wake", false);
+    renderSeg("seg-wake", "off");
+    syncMic();
+  });
+  document.addEventListener("visibilitychange", function () { syncMic(); });
+
+  Voice.onChange = function () { musicPolicy(); syncMic(); settle(); };
+  Voice.onError = function (m) { showSys(m); };
+  Music.onChange = function () { renderUI(); renderMusicState(); };
+  Music.onWarn = function (m) { showSys(m); };
+
+  function renderVoiceBtn() {
+    var b = $("#voice");
+    b.hidden = !Voice.can();
+    b.setAttribute("aria-pressed", String(Voice.cfg.on));
+    b.textContent = "Voce: " + (Voice.cfg.on ? "on" : "off");
+    renderTele();
+  }
+  $("#voice").addEventListener("click", function () {
+    Voice.cfg.on = !Voice.cfg.on;
+    Voice.save();
+    if (!Voice.cfg.on) Voice.cancel();
+    renderVoiceBtn();
+  });
+
+  /* ============================================================
+     Cervello: dentro Claude usa la capacità "sample"; nella versione
+     autonoma chiama Claude o Gemini con la chiave dell'utente.
+     ============================================================ */
+  var samplePromise = null;
+  function getSample() {
+    if (!samplePromise) {
+      samplePromise = (async function () {
+        var s = null;
+        try { s = window.claude && window.claude.use ? await window.claude.use("sample") : null; } catch (e) { s = null; }
+        state.sample = s || null;
+        renderStatus();
+        return state.sample;
+      })();
+    }
+    return samplePromise;
+  }
+
+  async function readSSE(res, pick, onText) {
+    var reader = res.body.getReader(), dec = new TextDecoder(), buf = "", text = "", stop = null, srcs = [];
+    try {
+      for (;;) {
+        var r = await reader.read();
+        if (r.done) break;
+        buf += dec.decode(r.value, { stream: true });
+        var parts = buf.split(/\r?\n\r?\n/);
+        buf = parts.pop();
+        for (var i = 0; i < parts.length; i++) {
+          var lines = parts[i].split(/\r?\n/);
+          for (var j = 0; j < lines.length; j++) {
+            if (lines[j].indexOf("data:") !== 0) continue;
+            var raw = lines[j].slice(5).trim();
+            if (!raw || raw === "[DONE]") continue;
+            var obj;
+            try { obj = JSON.parse(raw); } catch (e) { continue; }
+            var d = pick(obj);
+            if (d.error) throw { code: "upstream_error", message: d.error, text: text };
+            if (d.src) srcs = srcs.concat(d.src);
+            if (d.text) { text += d.text; onText({ text: text, delta: d.text }); }
+            if (d.stop) stop = d.stop;
+          }
+        }
+      }
+    } catch (e) {
+      if (e && e.code) throw e;
+      if (e && e.name === "AbortError") throw { code: "cancelled", message: "cancelled", text: text };
+      throw { code: "upstream_error", message: String(e), text: text };
+    }
+    if (!text.trim()) throw { code: "empty_completion", message: "empty" };
+    var seen = {};
+    srcs = srcs.filter(function (s) { if (seen[s.url]) return false; seen[s.url] = 1; return true; });
+    return { text: text, truncated: stop === "max_tokens" || stop === "length", srcs: srcs };
+  }
+  async function post(url, headers, body, signal) {
+    try {
+      return await fetch(url, { method: "POST", signal: signal, headers: headers, body: JSON.stringify(body) });
+    } catch (e) {
+      if (e && e.name === "AbortError") throw { code: "cancelled", message: "cancelled" };
+      throw { code: "network", message: String(e) };
+    }
+  }
+  function httpError(res) {
+    var c = (res.status === 401 || res.status === 403 || res.status === 400 && state.brain === "gemini") ? "bad_key" : res.status === 429 ? "rate_limited" : "upstream_error";
+    return { code: c, message: "HTTP " + res.status };
+  }
+  async function streamClaude(system, turns, tier, onText, signal) {
+    var key = String(store.get("kClaude", "") || "");
+    if (!key) throw { code: "no_key", message: "no key" };
+    var model = { quick: "claude-haiku-5-5", "default": "claude-sonnet-5-5", complex: "claude-opus-5-5" }[tier] || "claude-sonnet-5-5";
+    var headers = { "content-type": "application/json", "x-api-key": key, "anthropic-version": "2023-06-01", "anthropic-dangerous-direct-browser-access": "true" };
+    var body = { model: model, max_tokens: 1024, system: system, messages: turns, stream: true };
+    var useWeb = state.web, webOff = false;
+    if (useWeb) { body.tools = [{ type: "web_search_20250305", name: "web_search", max_uses: 3 }]; body.max_tokens = 1600; }
+    var res = await post("https://api.anthropic.com/v1/messages", headers, body, signal);
+    if (!res.ok && useWeb && (res.status === 400 || res.status === 403 || res.status === 404)) {
+      /* l'account non consente la ricerca: si riprova una volta, senza, e lo si dice */
+      delete body.tools; body.max_tokens = 1024; webOff = true;
+      res = await post("https://api.anthropic.com/v1/messages", headers, body, signal);
+    }
+    if (!res.ok) throw httpError(res);
+    var out = await readSSE(res, function (o) {
+      if (o.type === "content_block_delta" && o.delta && o.delta.type === "text_delta") return { text: o.delta.text };
+      if (o.type === "content_block_start" && o.content_block && o.content_block.type === "web_search_tool_result" && Array.isArray(o.content_block.content)) {
+        return { src: o.content_block.content.filter(function (x) { return x && x.url; }).map(function (x) { return { title: x.title || x.url, url: x.url }; }) };
+      }
+      if (o.type === "message_delta" && o.delta && o.delta.stop_reason) return { stop: o.delta.stop_reason };
+      if (o.type === "error") return { error: (o.error && o.error.message) || "error" };
+      return {};
+    }, onText);
+    out.webOff = webOff;
+    return out;
+  }
+  async function streamGemini(system, turns, tier, onText, signal) {
+    var key = String(store.get("kGemini", "") || ""), model = String(store.get("gModel", "") || "gemini-2.5-flash");
+    if (!key) throw { code: "no_key", message: "no key" };
+    var res = await post("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(model) + ":streamGenerateContent?alt=sse&key=" + encodeURIComponent(key), {
+      "content-type": "application/json"
+    }, {
+      systemInstruction: { parts: [{ text: system }] },
+      contents: turns.map(function (t) { return { role: t.role === "assistant" ? "model" : "user", parts: [{ text: t.content }] }; }),
+      generationConfig: { maxOutputTokens: 1024 }
+    }, signal);
+    if (!res.ok) throw httpError(res);
+    return readSSE(res, function (o) {
+      if (o.error) return { error: o.error.message || "error" };
+      var c = o.candidates && o.candidates[0];
+      if (!c) return {};
+      var t = ((c.content && c.content.parts) || []).map(function (p) { return p.text || ""; }).join("");
+      return { text: t, stop: c.finishReason === "MAX_TOKENS" ? "max_tokens" : null };
+    }, onText);
+  }
+  async function think(system, turns, tier, onText, signal) {
+    if (!STANDALONE) {
+      var s = await getSample();
+      if (!s) throw { code: "no_brain", message: "sample non disponibile" };
+      return s([{ role: "user", content: system }].concat(turns), { signal: signal, modelTier: tier, cache: false, onText: onText });
+    }
+    return state.brain === "gemini" ? streamGemini(system, turns, tier, onText, signal) : streamClaude(system, turns, tier, onText, signal);
+  }
+  function webActive() { return STANDALONE && state.web && state.brain === "claude"; }
+
+  function pickTier(text) {
+    if (state.depth !== "auto") return TIER[state.depth] || "default";
+    var hard = /spiega|analizz|calcol|risolv|confront|perch[eé]|come funziona|codice|program|scrivi|riassum|traduc|strategi|piano|differenz|dimostr|equazion|ragion|consigli|conviene|pro e contro/i;
+    return (text.length > 110 || hard.test(text)) ? "default" : "quick";
+  }
+
+  function rules() {
+    var d = new Intl.DateTimeFormat("it-IT", { dateStyle: "full", timeStyle: "short" }).format(new Date());
+    function line(m) { return "#" + m.id + " [" + PRI[m.pri] + "] " + m.title + (m.due ? " (scadenza " + fmtDue(m.due) + ")" : "") + (m.ex ? " (esempio)" : ""); }
+    var open = state.missions.filter(function (m) { return !m.done; }).map(line).join("\n") || "(nessuna)";
+    var done = state.missions.filter(function (m) { return m.done; }).slice(0, 5).map(line).join("\n") || "(nessuna)";
+    var mem = !state.mem ? "(la memoria personale è disattivata dall'utente)"
+      : state.notes.filter(function (n) { return n.k === "mem"; }).slice(0, 40).map(function (n) { return "- " + clip(n.text, 200); }).join("\n") || "(ancora nessuno)";
+    var notes = state.notes.filter(function (n) { return n.k !== "mem"; }).slice(0, 6).map(function (n) { return "#" + n.id + ": " + clip(n.text, 240) + (n.ex ? " (esempio)" : ""); }).join("\n") || "(nessuna)";
+    var how = Ears.ok ? "L'utente ti parla al microfono (il testo è una trascrizione automatica)" : "L'utente ti parla dettando con la tastiera";
+    var out = [
+      "Sei JARVIS (Ultron Edition), un assistente personale ispirato a Jarvis di Iron Man, con un nucleo rosso animato a schermo intero. " + how + " e le tue risposte vengono lette ad alta voce, oltre a comparire come sottotitoli. Rispondi in italiano, salvo che l'utente chieda un'altra lingua. Se rispondi in una lingua diversa dall'italiano (per esempio per una traduzione), inizia la risposta con [[lingua: en-US]] (codice BCP-47 della lingua parlata) così la voce usa la lingua giusta.",
+      "Rivolgiti all'utente con «" + state.name + "». Tono formale, professionale ed efficiente; " + IRONY[state.irony] + ".",
+      "Modalità attiva: " + MODES[state.mode][1] + ".",
+      "Poiché le risposte sono parlate: frasi naturali e scorrevoli, senza elenchi lunghi, senza tabelle, senza URL, senza simboli decorativi. La trascrizione può contenere piccoli errori: interpreta l'intento senza farli notare.",
+      "Puoi rispondere a qualsiasi domanda: cultura generale, scienza, matematica, tecnologia e codice, scrittura e traduzioni, salute e vita pratica, decisioni, ragionamento. Ragiona con cura e dai risposte corrette, concrete e utili, come farebbe un consulente molto competente.",
+      "Lunghezza: alle domande semplici rispondi in una-quattro frasi. Alle domande complesse sviluppa quanto serve, ma in modo ordinato e parlabile: conclusione in apertura, poi i punti chiave. Quando ricevi un compito, apri con una breve conferma di sistema (per esempio «Subito, " + state.name + "» o «Analisi in corso»), poi vai al punto. Scrivi le formule in testo semplice con simboli Unicode (√, ², ≥), mai in LaTeX. Il codice, se richiesto, va in blocchi di codice e non viene letto ad alta voce: dillo in una frase.",
+      "Sii onesto e preciso: non inventare fatti, cifre o fonti, e ammetti quando non sai qualcosa. " + (webActive()
+        ? "Hai la ricerca web: usala per notizie e dati recenti e distingui ciò che hai verificato dalle ipotesi."
+        : "Non puoi navigare in rete: per notizie recenti o dati in tempo reale dillo in una frase e offri ciò che sai."),
+      "L'applicazione gestisce da sola, con comandi vocali, meteo («che tempo fa a Milano»), timer («timer di cinque minuti»), musica di attivazione e modalità. Tu non puoi inviare notifiche di sistema, messaggi, email o chiamate, né controllare app, telefono o domotica: se richiesto, dillo senza fingere.",
+      state.mem
+        ? "Comandi: per agire sui dati dell'utente scrivi, in coda alla risposta, uno o più marcatori su righe separate; il sistema li esegue e non li mostra né li legge. Formati: [[memorizza: fatto]] per salvare in memoria un fatto duraturo sull'utente (preferenze, persone, abitudini, obiettivi); [[dimentica: testo]] per eliminare un ricordo che contiene quel testo; [[modifica: vecchio => nuovo]] per correggere un ricordo; [[missione: titolo | alta | 2026-10-25 18:00]] per aggiungere un'attività (priorità alta, media o bassa; scadenza facoltativa in formato AAAA-MM-GG oppure AAAA-MM-GG HH:MM, calcolata dalla data e ora dell'utente); [[completa: id]] per chiudere l'attività con quell'id; [[nota: testo]] per archiviare una nota. Usali solo quando l'utente lo chiede o dichiara chiaramente un fatto duraturo, e conferma a parole in modo breve. Non memorizzare mai password, numeri di carte o di documenti, né dati sensibili. Non dire di aver salvato qualcosa se non hai scritto il marcatore. I promemoria suonano solo se questa pagina resta aperta: non promettere notifiche di sistema."
+        : "Comandi: [[missione: titolo | alta | 2026-10-25 18:00]] aggiunge un'attività (priorità alta, media o bassa; scadenza facoltativa), [[completa: id]] la chiude, [[nota: testo]] archivia una nota. La memoria personale è disattivata: non salvare né usare fatti sull'utente. Non dire di aver salvato qualcosa se non hai scritto il marcatore.",
+      "Le voci marcate (esempio) sono dati dimostrativi pre-caricati, non dell'utente: se le citi, dillo.",
+      "",
+      "Data e ora dell'utente: " + d,
+      "Fatti che conosci dell'utente (memoria di JARVIS):\n" + mem,
+      "Attività aperte:\n" + open,
+      "Attività completate di recente:\n" + done,
+      "Note più recenti:\n" + notes
+    ];
+    if (state.doc) out.push("Documento caricato dall'utente, «" + state.doc.name + "» (testo" + (state.doc.cut ? ", troncato" : "") + "); usalo per rispondere a domande, riassumere, tradurre o riformulare:\n" + state.doc.text);
+    return out.join("\n");
+  }
+
+  function parseDue(s) {
+    var m = String(s || "").trim().match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{1,2}):(\d{2}))?$/);
+    if (!m) return null;
+    var d = new Date(Number(m[1]), Number(m[2]) - 1, Number(m[3]), m[4] ? Number(m[4]) : 9, m[5] ? Number(m[5]) : 0, 0, 0);
+    return isNaN(d.getTime()) ? null : d.getTime();
+  }
+  var fmtStamp = new Intl.DateTimeFormat("it-IT", { day: "numeric", month: "short", hour: "2-digit", minute: "2-digit" });
+  function fmtDue(ts) { return fmtStamp.format(new Date(ts)).replace(/\./g, ""); }
+
+  function execCmd(k, v) {
+    v = String(v || "").trim();
+    if (!v) return;
+    try {
+      if (k === "memorizza") {
+        if (!state.mem) return;
+        v = v.slice(0, 300);
+        var dup = state.notes.some(function (n) { return n.k === "mem" && n.text.toLowerCase() === v.toLowerCase(); });
+        if (dup || memCount() >= 60) return;
+        state.notes.unshift({ id: nid(state.notes), text: v, ts: Date.now(), k: "mem" });
+        saveNotes();
+        sysLine("In memoria: " + clip(v, 70));
+        learn(6);
+      } else if (k === "dimentica") {
+        if (!state.mem) return;
+        var low = v.toLowerCase(), idx = state.notes.findIndex(function (n) { return n.k === "mem" && n.text.toLowerCase().indexOf(low) >= 0; });
+        if (idx < 0) return;
+        var gone = state.notes.splice(idx, 1)[0];
+        saveNotes();
+        sysLine("Dimenticato: " + clip(gone.text, 60));
+      } else if (k === "modifica") {
+        if (!state.mem) return;
+        var pr2 = v.split("=>");
+        if (pr2.length < 2) return;
+        var old = pr2[0].trim().toLowerCase(), nw = pr2.slice(1).join("=>").trim().slice(0, 300);
+        var it = state.notes.find(function (n) { return n.k === "mem" && n.text.toLowerCase().indexOf(old) >= 0; });
+        if (!it || !nw) return;
+        it.text = nw; it.ts = Date.now();
+        saveNotes();
+        sysLine("Ricordo aggiornato: " + clip(nw, 60));
+      } else if (k === "nota") {
+        v = v.slice(0, 1000);
+        state.notes.unshift({ id: nid(state.notes), text: v, ts: Date.now() });
+        saveNotes();
+        sysLine("Nota archiviata: " + clip(v, 60));
+        learn(2);
+      } else if (k === "missione") {
+        var parts = v.split("|"), title = parts[0].trim().slice(0, 140);
+        var pr = { alta: "high", media: "med", bassa: "low" }[String(parts[1] || "media").trim().toLowerCase()] || "med";
+        var due = parts[2] ? parseDue(parts[2]) : null;
+        if (!title) return;
+        state.missions.unshift({ id: nid(state.missions), title: title, pri: pr, done: false, due: due, notified: false });
+        saveMissions();
+        sysLine("Attività aggiunta: " + title + (due ? " · scadenza " + fmtDue(due) : ""));
+        learn(2);
+      } else if (k === "completa") {
+        var id = Number(v.replace(/[^0-9]/g, "")), m = state.missions.find(function (x) { return x.id === id && !x.done; });
+        if (!m) return;
+        m.done = true;
+        saveMissions();
+        sysLine("Attività completata: " + m.title);
+      }
+    } catch (e) { /* un comando non riuscito non deve fermare la risposta */ }
+  }
+
+  function copyFor(code) {
+    switch (code) {
+      case "not_granted": return "Autorizzazione non concessa, " + state.name + ". Senza il suo consenso il nucleo conversazionale resta spento.";
+      case "rate_limited": return "Limite di richieste raggiunto. Il pulsante si riattiva tra 30 secondi. Se l'avviso si ripete, il limite del suo account potrebbe essere esaurito: la profondità «Rapida» in Impostazioni consuma meno.";
+      case "session_expired": return "Sessione scaduta. Acceda di nuovo a Claude e riapra la pagina.";
+      case "sampling_disabled":
+      case "not_declared":
+      case "capability_disabled":
+      case "capability_removed":
+      case "no_brain": return "Il nucleo conversazionale non è disponibile per questo account o in questa vista. Apra JARVIS dall'app Claude.";
+      case "no_key": return "Manca la chiave API del cervello. La inserisca in Impostazioni › Collegamenti.";
+      case "bad_key": return "La chiave API non è valida o non ha i permessi. La controlli in Impostazioni › Collegamenti.";
+      case "network": return "Connessione al servizio non riuscita. Controlli la rete e riprovi.";
+      case "refused": return "Non posso dar seguito alla richiesta così com'è formulata. Provi con parole diverse.";
+      case "empty_completion": return "Nessuna risposta prodotta. Riformuli la richiesta.";
+      case "prompt_too_large": return "La conversazione è diventata troppo lunga. Avvii una nuova sessione dalla Cronologia.";
+      default: return "Interruzione temporanea del collegamento. Può riprovare a parlare o con il pulsante Invia.";
+    }
+  }
+
+  async function send(raw) {
+    var text = String(raw || "").trim();
+    if (!text || state.busy || coolTimer) return;
+    disarm();
+    q.value = ""; autosize();
+    clearError();
+    if (!awake) silentWake();
+    setBusy(true);
+    if (Ears.active()) Ears.stop();
+    Voice.reset();
+    Sfx.send();
+    capOverride = "";
+    pushMsg({ r: "user", t: text });
+    state.streaming = false;
+    setCap({ user: text, html: '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="wait">Analisi in corso…</span>' });
+    var t0 = Date.now();
+
+    var node = msgEl({ r: "atlas", t: "" });
+    node.body.innerHTML = '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span>';
+    log.appendChild(node.el);
+    pendingEl = node.el;
+
+    var turns = state.msgs
+      .filter(function (m) { return !m.local && (m.r === "user" || m.r === "atlas"); })
+      .slice(-10)
+      .map(function (m) { return { role: m.r === "user" ? "user" : "assistant", content: m.t }; });
+    while (turns.length && turns[0].role !== "user") turns.shift();
+
+    ctl = new AbortController();
+    var partial = "", limited = false, ok = false, answer = "", cmds = [], webOff = false, langWarn = false;
+    function onText(u) {
+      if (!state.streaming) {
+        state.streaming = true;
+        state.latency = Date.now() - t0;
+        Sfx.reply();
+        settle();
+      }
+      partial = u.text;
+      var lm = LANG_RE.exec(u.text);
+      if (lm) { Voice.setLang(lm[1]); if (!Voice.langOk()) langWarn = true; }
+      var shown = hideMarks(u.text);
+      node.body.innerHTML = md(shown);
+      setCap({ user: text, html: md(shown) });
+      capBody.scrollTop = capBody.scrollHeight;
+      Voice.feed(shown, false);
+    }
+
+    try {
+      var r = await think(rules(), turns, pickTier(text), onText, ctl.signal);
+      var sp = splitMarks(r.text);
+      cmds = sp.cmds;
+      webOff = !!r.webOff;
+      answer = sp.clean.trim();
+      if (!answer) answer = cmds.length ? "Eseguito, " + state.name + "." : "";
+      if (r.truncated) answer += "\n\nRisposta interrotta per lunghezza. Chieda un dettaglio alla volta.";
+      if (!answer) throw { code: "empty_completion", message: "empty" };
+      Voice.feed(answer, true);
+      var shownFull = answer;
+      if (r.srcs && r.srcs.length) {
+        shownFull += "\n\nFonti:\n" + r.srcs.slice(0, 5).map(function (s) { return "- [" + String(s.title).replace(/[\[\]]/g, "") + "](" + s.url + ")"; }).join("\n");
+      }
+      node.body.innerHTML = md(shownFull);
+      setCap({ user: text, html: md(shownFull) });
+      state.msgs.push({ r: "atlas", t: shownFull });
+      ok = true;
+    } catch (e) {
+      var code = (e && e.code) || "upstream_error";
+      var keep = code === "refused" ? "" : hideMarks((e && e.text) || partial).trim();
+      if (keep) { node.body.innerHTML = md(keep); state.msgs.push({ r: "atlas", t: keep }); setCap({ user: text, html: md(keep) }); }
+      else node.el.remove();
+      limited = code === "rate_limited";
+      if (code !== "cancelled") {
+        var em = copyFor(code);
+        pushMsg({ r: "err", t: em });
+        setCap({ user: text, text: em, err: true });
+        setError(em);
+        if (code === "no_key" || code === "bad_key" || code === "no_brain") convoOn = false;
+        Voice.say(em.split(". ")[0] + ".");
+      } else {
+        Voice.cancel();
+        if (!keep) capFromHistory();
+      }
+    } finally {
+      pendingEl = null;
+      ctl = null;
+      state.streaming = false;
+      setBusy(false);
+      if (limited) cooldown(30);
+      saveMsgs();
+      if (current === "history") stick(true);
+    }
+    if (ok) {
+      cmds.slice(0, 4).forEach(function (c) { execCmd(c[0], c[1]); });
+      state.mind.exchanges++;
+      store.set("exchanges", state.mind.exchanges);
+      learn(clamp(Math.round(answer.length / 90) + 3, 3, 12));
+      if (webOff) sysLine("Ricerca web non disponibile per questo account: ho risposto senza ricerca.");
+      if (langWarn) sysLine("Nessuna voce installata per quella lingua: leggo con la voce italiana.");
+    }
+    syncMic();
+    settle();
+  }
+
+  $("#f-chat").addEventListener("submit", function (e) {
+    e.preventDefault();
+    if (state.busy) { if (ctl) ctl.abort(); return; }
+    send(q.value);
+  });
+  $("#reset").addEventListener("click", function () {
+    if (ctl) ctl.abort();
+    Voice.cancel();
+    greeting();
+    renderLog();
+    capOverride = "";
+    capFromHistory();
+  });
+
+  /* ---------- Attività (con scadenza) ---------- */
+  var CHECK = '<svg viewBox="0 0 16 16" aria-hidden="true"><path d="M3 8.5l3 3 7-7"/></svg>';
+  function saveMissions() { store.set("missions", state.missions); renderMissions(); renderStatus(); }
+  function renderMissions() {
+    var list = $("#m-list"), now = Date.now();
+    var active = state.missions.filter(function (m) { return !m.done; }).length;
+    var done = state.missions.length - active;
+    var due = state.missions.filter(function (m) { return !m.done && m.due && m.due < now + 86400000; }).length;
+    $("#m-sum").innerHTML = "<b>" + active + "</b> " + (active === 1 ? "attiva" : "attive") + " · <b>" + done + "</b> " + (done === 1 ? "completata" : "completate") + (due ? " · <b>" + due + "</b> in scadenza entro 24 ore" : "");
+    var badge = $("#badge");
+    badge.hidden = active === 0;
+    badge.textContent = String(active);
+    if (!state.missions.length) {
+      list.innerHTML = '<li class="empty">Nessuna attività in corso. Ne aggiunga una qui sotto, oppure la chieda a JARVIS.</li>';
+      return;
+    }
+    var sorted = state.missions.slice().sort(function (a, b) {
+      return (Number(a.done) - Number(b.done)) || ((a.due || 1e15) - (b.due || 1e15)) || (PRI_ORDER[a.pri] - PRI_ORDER[b.pri]) || (b.id - a.id);
+    });
+    list.innerHTML = sorted.map(function (m) {
+      var late = !m.done && m.due && m.due < now;
+      return '<li class="mrow' + (m.done ? " done" : "") + '">' +
+        '<button class="check" type="button" data-act="toggle" data-id="' + m.id + '" aria-pressed="' + m.done + '" aria-label="' + (m.done ? "Riattiva" : "Completa") + ": " + esc(m.title) + '">' + CHECK + "</button>" +
+        '<div class="mt"><span class="t">' + esc(m.title) + '</span><span class="meta"><b class="p-' + m.pri + '">' + PRI[m.pri] + "</b>" +
+        (m.due ? "<em" + (late ? ' class="mem"' : "") + ">" + (late ? "scaduta " : "") + esc(fmtDue(m.due)) + "</em>" : "") + (m.ex ? "<em>esempio</em>" : "") + "</span></div>" +
+        '<button class="del" type="button" data-act="del" data-id="' + m.id + '" aria-label="Elimina attività">×</button></li>';
+    }).join("");
+  }
+  $("#m-list").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-act]");
+    if (!b) return;
+    var id = Number(b.dataset.id);
+    if (b.dataset.act === "toggle") {
+      var m = state.missions.find(function (x) { return x.id === id; });
+      if (m) m.done = !m.done;
+    } else {
+      state.missions = state.missions.filter(function (x) { return x.id !== id; });
+    }
+    saveMissions();
+  });
+  $("#f-mission").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = $("#m-title").value.trim();
+    if (!t) return;
+    var dv = $("#m-due").value, due = dv ? parseDue(dv.replace("T", " ")) : null;
+    state.missions.unshift({ id: nid(state.missions), title: t.slice(0, 140), pri: $("#m-pri").value, done: false, due: due, notified: false });
+    $("#m-title").value = ""; $("#m-due").value = "";
+    saveMissions();
+    learn(2);
+  });
+  /* promemoria: suonano e parlano solo mentre la pagina è aperta (nessuna notifica di sistema) */
+  function checkDue() {
+    var now = Date.now(), fired = false;
+    state.missions.forEach(function (m) {
+      if (!m.done && m.due && m.due <= now && !m.notified) {
+        m.notified = true; fired = true;
+        sysLine("Promemoria: " + m.title);
+        Sfx.alarm();
+        Voice.say("Promemoria, " + state.name + ": " + m.title + ".");
+      }
+    });
+    if (fired) saveMissions();
+  }
+  setInterval(checkDue, 15000);
+
+  /* ---------- Note e memoria ---------- */
+  function saveNotes() { store.set("notes", state.notes); renderNotes(); renderStatus(); renderTele(); }
+  function renderNotes() {
+    var box = $("#n-list");
+    var n = state.notes.length, mm = memCount();
+    $("#n-sum").innerHTML = "<b>" + n + "</b> " + (n === 1 ? "voce" : "voci") + " in archivio · <b>" + mm + "</b> in memoria di JARVIS" + (state.mem ? "" : " (memoria disattivata)");
+    if (!n) { box.innerHTML = '<div class="empty">Archivio vuoto. Scriva una nota qui sotto, oppure dica a JARVIS «ricorda che…».</div>'; return; }
+    box.innerHTML = state.notes.map(function (x) {
+      return '<div class="note"><p>' + esc(x.text) + '</p><button class="del" type="button" data-id="' + x.id + '" aria-label="Elimina nota">×</button>' +
+        '<div class="meta">' + esc(fmtStamp.format(new Date(x.ts)).replace(/\./g, "")) + (x.k === "mem" ? '<em class="mem">memoria</em>' : "") + (x.ex ? "<em>esempio</em>" : "") + "</div></div>";
+    }).join("");
+  }
+  $("#n-list").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-id]");
+    if (!b) return;
+    var id = Number(b.dataset.id);
+    state.notes = state.notes.filter(function (x) { return x.id !== id; });
+    saveNotes();
+  });
+  var nText = $("#n-text");
+  nText.addEventListener("input", function () { nText.style.height = "auto"; nText.style.height = Math.min(nText.scrollHeight, 120) + "px"; });
+  $("#f-note").addEventListener("submit", function (e) {
+    e.preventDefault();
+    var t = nText.value.trim();
+    if (!t) return;
+    state.notes.unshift({ id: nid(state.notes), text: t.slice(0, 1000), ts: Date.now() });
+    nText.value = ""; nText.style.height = "auto";
+    saveNotes();
+    learn(2);
+  });
+  var wipeArmed = null;
+  $("#n-wipe").addEventListener("click", function () {
+    var b = this, msg = $("#n-wipe-msg");
+    if (!wipeArmed) {
+      b.textContent = "Conferma: cancella tutto";
+      msg.textContent = "Cancella note, memoria e attività da questo browser. Tocchi di nuovo per confermare.";
+      wipeArmed = setTimeout(function () { wipeArmed = null; b.textContent = "Cancella la memoria"; msg.textContent = ""; }, 6000);
+      return;
+    }
+    clearTimeout(wipeArmed); wipeArmed = null;
+    state.notes = []; state.missions = [];
+    state.msgs = []; greeting(); renderLog();
+    saveNotes(); saveMissions();
+    b.textContent = "Cancella la memoria";
+    msg.textContent = "Fatto: note, memoria e attività sono state cancellate da questo browser.";
+  });
+  $("#n-export").addEventListener("click", function () {
+    var msg = $("#n-wipe-msg");
+    try {
+      var data = { esportato: new Date().toISOString(), memoria: state.notes.filter(function (n) { return n.k === "mem"; }), note: state.notes.filter(function (n) { return n.k !== "mem"; }), attivita: state.missions };
+      var json = JSON.stringify(data, null, 2);
+      if (!STANDALONE) {
+        /* dentro Claude il download diretto è bloccato: si passa dalla capacità «downloads», con conferma dell'utente */
+        Promise.resolve().then(function () { return window.claude.use("downloads"); }).then(function (dl) {
+          if (!dl) throw { code: "unavailable" };
+          return dl.save({ filename: "jarvis-dati.json", data: json });
+        }).then(function () {
+          msg.textContent = "Esportazione completata: jarvis-dati.json.";
+        }).catch(function (e) {
+          msg.textContent = e && e.code === "declined" ? "Esportazione annullata." : "Esportazione non disponibile in questa vista: usi la versione autonoma.";
+        });
+        return;
+      }
+      var blob = new Blob([json], { type: "application/json" });
+      var a = document.createElement("a");
+      a.href = URL.createObjectURL(blob);
+      a.download = "jarvis-dati.json";
+      B.appendChild(a); a.click(); a.remove();
+      setTimeout(function () { URL.revokeObjectURL(a.href); }, 3000);
+      msg.textContent = "Esportazione avviata: jarvis-dati.json. Se il browser la blocca, usi la versione autonoma.";
+    } catch (e) { msg.textContent = "Esportazione non disponibile in questa vista."; }
+  });
+
+  /* ---------- Timer (locali: suonano solo con la pagina aperta) ---------- */
+  var timers = [], timerId = 0;
+  function fmtDur(ms) {
+    var s = Math.round(ms / 1000), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), sec = s % 60, out = [];
+    if (h) out.push(h + (h === 1 ? " ora" : " ore"));
+    if (m) out.push(m + (m === 1 ? " minuto" : " minuti"));
+    if (sec && !h) out.push(sec + (sec === 1 ? " secondo" : " secondi"));
+    return out.join(" e ") || "0 secondi";
+  }
+  function fmtClock(ms) {
+    var s = Math.max(0, Math.ceil(ms / 1000)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), x = s % 60;
+    function p(v) { return v < 10 ? "0" + v : String(v); }
+    return (h ? h + ":" : "") + p(m) + ":" + p(x);
+  }
+  function addTimer(ms) { timers.push({ id: ++timerId, end: Date.now() + ms, total: ms }); renderTimers(); }
+  function renderTimers() {
+    var box = $("#t-list"), now = Date.now();
+    if (!timers.length) { box.innerHTML = ""; return; }
+    box.innerHTML = timers.map(function (t) {
+      return '<div class="trow"><span>Timer · ' + esc(fmtDur(t.total)) + '</span><span>' + fmtClock(t.end - now) + '</span><button class="del" type="button" data-id="' + t.id + '" aria-label="Annulla timer">×</button></div>';
+    }).join("");
+  }
+  $("#t-list").addEventListener("click", function (e) {
+    var b = e.target.closest("button[data-id]");
+    if (!b) return;
+    timers = timers.filter(function (t) { return t.id !== Number(b.dataset.id); });
+    renderTimers();
+  });
+  $("#t-go").addEventListener("click", function () {
+    var m = clamp(Math.round(num($("#t-min").value, 5)), 1, 600);
+    unlockAll();
+    addTimer(m * 60000);
+  });
+  setInterval(function () {
+    if (!timers.length) return;
+    var now = Date.now(), gone = timers.filter(function (t) { return now >= t.end; });
+    if (gone.length) {
+      timers = timers.filter(function (t) { return now < t.end; });
+      gone.forEach(function (t) {
+        sysLine("Timer scaduto: " + fmtDur(t.total) + ".");
+        Sfx.alarm();
+        Voice.say("Timer scaduto, " + state.name + ".");
+      });
+    }
+    if (current === "tools") renderTimers();
+  }, 500);
+
+  /* ---------- Meteo (Open-Meteo: gratuito, senza chiave; solo versione autonoma) ---------- */
+  var WMO = [[[0], "sereno"], [[1], "prevalentemente sereno"], [[2], "parzialmente nuvoloso"], [[3], "coperto"], [[45, 48], "nebbia"], [[51, 53, 55, 56, 57], "pioviggine"],
+    [[61, 63, 65, 66, 67], "pioggia"], [[71, 73, 75, 77], "neve"], [[80, 81, 82], "rovesci"], [[85, 86], "rovesci di neve"], [[95], "temporale"], [[96, 99], "temporale con grandine"]];
+  function wcode(c) {
+    for (var i = 0; i < WMO.length; i++) if (WMO[i][0].indexOf(Number(c)) >= 0) return WMO[i][1];
+    return "condizioni variabili";
+  }
+  async function getJSON(url, ms) {
+    var c = new AbortController(), tm = setTimeout(function () { c.abort(); }, ms || 8000);
+    try {
+      var r = await fetch(url, { signal: c.signal });
+      if (!r.ok) throw { code: "http", status: r.status };
+      return await r.json();
+    } finally { clearTimeout(tm); }
+  }
+  async function weatherFor(city) {
+    var g = await getJSON("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(city) + "&count=1&language=it&format=json");
+    if (!g || !g.results || !g.results.length) throw { code: "geo" };
+    var p = g.results[0];
+    var f = await getJSON("https://api.open-meteo.com/v1/forecast?latitude=" + p.latitude + "&longitude=" + p.longitude +
+      "&current=temperature_2m,apparent_temperature,weather_code,wind_speed_10m&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2&wind_speed_unit=kmh");
+    if (!f || !f.current || !f.daily || !f.daily.temperature_2m_max) throw { code: "bad" };
+    return { place: p.name, f: f };
+  }
+  function weatherText(w, tomorrow) {
+    var f = w.f, d = f.daily;
+    function r(x) { return Math.round(Number(x)); }
+    var s;
+    if (tomorrow) {
+      s = "Domani a " + w.place + ": " + wcode(d.weather_code[1]) + ", minima " + r(d.temperature_2m_min[1]) + " e massima " + r(d.temperature_2m_max[1]) + " gradi";
+      if (d.precipitation_probability_max && d.precipitation_probability_max[1] != null) s += ", probabilità di pioggia " + r(d.precipitation_probability_max[1]) + " per cento";
+      return s + ".";
+    }
+    s = "A " + w.place + " ci sono " + r(f.current.temperature_2m) + " gradi, " + wcode(f.current.weather_code);
+    if (f.current.apparent_temperature != null) s += ", percepiti " + r(f.current.apparent_temperature);
+    s += ". Vento a " + r(f.current.wind_speed_10m) + " chilometri orari. Oggi massima " + r(d.temperature_2m_max[0]) + " e minima " + r(d.temperature_2m_min[0]) + " gradi";
+    if (d.precipitation_probability_max && d.precipitation_probability_max[0] != null) s += ", probabilità di pioggia " + r(d.precipitation_probability_max[0]) + " per cento";
+    return s + ".";
+  }
+  async function runWeather(raw, city, tomorrow) {
+    var n = state.name;
+    if (state.busy) return "";
+    if (!STANDALONE) {
+      var msg0 = "Il meteo funziona solo nella versione autonoma di JARVIS, " + n + ": dentro Claude la pagina non può collegarsi a servizi esterni.";
+      $("#w-out").textContent = msg0;
+      return msg0;
+    }
+    if (!awake) silentWake();
+    setBusy(true);
+    state.streaming = false;
+    if (Ears.active()) Ears.stop();
+    Voice.reset();
+    pushMsg({ r: "user", t: raw });
+    setCap({ user: raw, html: '<span class="dots" aria-hidden="true"><i></i><i></i><i></i></span><span class="wait">Consulto le previsioni…</span>' });
+    var answer, ok = false;
+    try {
+      answer = weatherText(await weatherFor(city), tomorrow);
+      ok = true;
+    } catch (e) {
+      answer = e && e.code === "geo" ? "Non trovo la località «" + String(city).replace(/(^|[\s\-'’])(\S)/g, function (m, a, b) { return a + b.toUpperCase(); }) + "», " + n + "." : "Il servizio meteo non risponde in questo momento, " + n + ". Non invento previsioni: riprovi tra poco.";
+      setError(answer);
+    }
+    pushMsg({ r: ok ? "atlas" : "err", t: answer, local: true });
+    capOverride = "";
+    setCap({ user: raw, text: answer, err: !ok });
+    $("#w-out").textContent = answer;
+    Voice.say(answer);
+    setBusy(false);
+    syncMic();
+    return answer;
+  }
+  function weatherTurn(raw, t) {
+    var n = state.name;
+    if (!STANDALONE) { localTurn(raw, "Il meteo funziona solo nella versione autonoma di JARVIS, " + n + ": dentro Claude la pagina non può collegarsi a servizi esterni."); return; }
+    var city = cityFrom(t) || state.city;
+    if (!city) { localTurn(raw, "Non ho una località preferita, " + n + ". La imposti in Strumenti, oppure dica «che tempo fa a Milano»."); return; }
+    runWeather(raw, city, /\bdomani\b/.test(t));
+  }
+  $("#w-go").addEventListener("click", function () {
+    var c = $("#w-city").value.trim() || state.city;
+    if (!c) { $("#w-out").textContent = "Scriva una località, per esempio Milano."; return; }
+    state.city = c; store.set("city", c); $("#w-pref").value = c;
+    unlockAll();
+    runWeather("Meteo a " + c, c, false);
+  });
+
+  /* ---------- Documenti (solo testo, letti in locale) ---------- */
+  var DOC_MAX = 24000;
+  function renderDoc() {
+    var d = state.doc, st = $("#d-state");
+    st.classList.toggle("none", !d);
+    st.textContent = d ? "Caricato: " + d.name + " · " + d.text.length + " caratteri" + (d.cut ? " (troncato)" : "") : "Nessun documento caricato.";
+    $("#d-sum").disabled = !d;
+    $("#d-clear").disabled = !d;
+  }
+  $("#d-file").addEventListener("change", function () {
+    var f = this.files && this.files[0];
+    this.value = "";
+    if (!f) return;
+    var st = $("#d-state");
+    if (!/\.(txt|md|csv|json|html|xml)$/i.test(f.name) && !/^text\//.test(f.type)) {
+      st.classList.add("none");
+      st.textContent = "Formato non supportato: sono ammessi testo, Markdown, CSV, JSON, HTML e XML. I PDF non sono ancora supportati.";
+      return;
+    }
+    if (f.size > 2 * 1024 * 1024) { st.classList.add("none"); st.textContent = "File troppo grande (massimo 2 MB)."; return; }
+    var rd = new FileReader();
+    rd.onload = function () {
+      var tx = String(rd.result || "");
+      state.doc = { name: f.name, text: tx.slice(0, DOC_MAX), cut: tx.length > DOC_MAX };
+      renderDoc();
+    };
+    rd.onerror = function () { st.classList.add("none"); st.textContent = "Lettura del file non riuscita."; };
+    rd.readAsText(f);
+  });
+  $("#d-clear").addEventListener("click", function () { state.doc = null; renderDoc(); });
+  $("#d-sum").addEventListener("click", function () {
+    if (!state.doc || state.busy) return;
+    show("console");
+    send("Riassumi il documento «" + state.doc.name + "» in modo chiaro e parlabile.");
+  });
+
+  /* ---------- Sistemi ---------- */
+  function brainRow() {
+    if (!STANDALONE) return state.sample === undefined ? ["wait", "Verifica in corso"] : state.sample ? ["ok", "In linea (Claude)"] : ["off", "Non disponibile"];
+    var has = state.brain === "gemini" ? !!store.get("kGemini", "") : !!store.get("kClaude", "");
+    return has ? ["ok", (state.brain === "gemini" ? "Gemini" : "Claude") + " · chiave impostata"] : ["off", "Chiave mancante"];
+  }
+  function renderAI() {
+    var b = brainRow(), dot = $("#ai-dot");
+    dot.className = "dot " + (b[0] === "ok" ? "ok" : b[0] === "wait" ? "wait" : "off");
+    $("#ai-txt").textContent = "IA · " + (b[0] === "ok" ? "in linea" : b[0] === "wait" ? "verifica" : STANDALONE ? "senza chiave" : "offline");
+  }
+  function renderStatus() {
+    var active = state.missions.filter(function (m) { return !m.done; }).length;
+    var st = Net.stats(), mm = memCount(), info = Music.info();
+    var vs = Voice.usingEl() ? ["ok", "ElevenLabs"] : !Voice.sysOk ? ["off", "Non disponibile"] : Voice.itCount() ? ["ok", Voice.itCount() + (Voice.itCount() === 1 ? " voce italiana" : " voci italiane")] : ["wait", "Nessuna voce italiana"];
+    var ms = Ears.ok ? ["ok", "Microfono diretto"] : STANDALONE ? ["wait", "Solo tastiera"] : ["wait", "Dettatura da tastiera"];
+    var wk = !Ears.ok ? ["off", "Non disponibile qui"] : wakeOn ? ["ok", "Attiva · «" + fmtPhrase(state.phrases[0]) + "»"] : ["wait", "Spenta"];
+    var mu = !Music.cfg.on ? ["wait", "Disattivata"] : !info ? ["wait", "File non configurato"] : info.bad ? ["off", "File non riproducibile"] : ["ok", clip(info.name, 28)];
+    var rows = [
+      ["Nucleo conversazionale", brainRow()],
+      ["Voce di JARVIS", vs],
+      ["Ascolto", ms],
+      ["Attivazione vocale", wk],
+      ["Musica di attivazione", mu],
+      ["Rete neurale (grafica)", ["ok", st.neurons + " nodi · liv. " + levelOf(state.mind.neurons)]],
+      ["Memoria di JARVIS", state.mem ? ["ok", mm + (mm === 1 ? " fatto" : " fatti")] : ["wait", "Disattivata"]],
+      ["Gestione attività", ["ok", active + (active === 1 ? " attiva" : " attive")]],
+      ["Archivio del browser", storageOk ? ["ok", "Attivo"] : ["wait", "Non disponibile"]]
+    ];
+    $("#s-rows").innerHTML = rows.map(function (r) {
+      return '<div class="srow"><span>' + r[0] + '</span><span class="st"><i class="dot ' + r[1][0] + '"></i>' + esc(r[1][1]) + "</span></div>";
+    }).join("");
+    renderAI();
+  }
+  function renderVoiceList() {
+    var sel = $("#s-voice"), list = Voice.list(), cur = Voice.current();
+    var html = list.length ? "" : '<option value="">Predefinita del sistema</option>';
+    list.forEach(function (v) {
+      html += '<option value="' + esc(v.voiceURI) + '"' + (cur && cur.voiceURI === v.voiceURI ? " selected" : "") + ">" + esc(v.name) + "</option>";
+    });
+    sel.innerHTML = html;
+    sel.disabled = !Voice.sysOk;
+    $("#s-test").disabled = !Voice.can();
+  }
+  Voice.onVoices = function () { renderVoiceList(); renderStatus(); renderVoiceBtn(); };
+  $("#s-voice").addEventListener("change", function () { Voice.cfg.uri = this.value; Voice.save(); });
+  function bindRange(id, key, fmt) {
+    var el = $("#" + id), lab = $("#" + id + "-v");
+    el.value = Voice.cfg[key];
+    lab.textContent = fmt(Voice.cfg[key]);
+    el.addEventListener("input", function () {
+      Voice.cfg[key] = Number(el.value);
+      lab.textContent = fmt(Voice.cfg[key]);
+    });
+    el.addEventListener("change", function () { Voice.save(); });
+  }
+  bindRange("s-pitch", "pitch", function (v) { return v.toFixed(2); });
+  bindRange("s-rate", "rate", function (v) { return v.toFixed(2) + "×"; });
+  $("#s-test").addEventListener("click", function () { unlockAll(); Sfx.reply(); Voice.cfg.on = true; Voice.save(); renderVoiceBtn(); Voice.test(); });
+
+  function renderSeg(id, val) {
+    $$("#" + id + " button").forEach(function (b) { b.setAttribute("aria-pressed", String(b.dataset.v === String(val))); });
+  }
+  function bindSeg(id, get, set) {
+    $$("#" + id + " button").forEach(function (b) {
+      b.addEventListener("click", function () { set(b.dataset.v); renderSeg(id, get()); });
+    });
+    renderSeg(id, get());
+  }
+  bindSeg("seg-irony", function () { return state.irony; }, function (v) { state.irony = v; store.set("irony", v); });
+  bindSeg("seg-depth", function () { return state.depth; }, function (v) { state.depth = v; store.set("depth", v); });
+  bindSeg("seg-auto", function () { return state.auto; }, function (v) { state.auto = Number(v); store.set("auto", state.auto); if (!state.auto) disarm(); });
+  bindSeg("seg-sfx", function () { return Sfx.get() ? "on" : "off"; }, function (v) { Sfx.set(v === "on"); });
+  bindSeg("seg-brain", function () { return state.brain; }, function (v) { state.brain = v; store.set("brain", v); renderKeyRows(); renderStatus(); });
+  bindSeg("seg-mode", function () { return state.mode; }, function (v) { setMode(v); });
+  bindSeg("seg-web", function () { return state.web ? "on" : "off"; }, function (v) { state.web = v === "on"; store.set("web", state.web); });
+  bindSeg("seg-mem", function () { return state.mem ? "on" : "off"; }, function (v) { state.mem = v === "on"; store.set("mem", state.mem); renderNotes(); renderStatus(); renderTele(); });
+  bindSeg("seg-barge", function () { return state.barge ? "on" : "off"; }, function (v) { state.barge = v === "on"; store.set("barge", state.barge); syncMic(); });
+  bindSeg("seg-music", function () { return Music.cfg.on ? "on" : "off"; }, function (v) { Music.setOn(v === "on"); if (v !== "on") Music.stop(); renderMusicState(); renderStatus(); });
+  bindSeg("seg-wake", function () { return wakeOn ? "on" : "off"; }, function (v) {
+    unlockAll();
+    micBlocked = false; micWhy = ""; errRuns = 0; quickEnds = 0; gateWake = false;
+    wakeOn = v === "on";
+    store.set("wake", wakeOn);
+    syncMic();
+    renderStatus();
+  });
+  bindSeg("seg-core", function () { return state.core; }, function (v) {
+    state.core = v === "off" ? "off" : "on";
+    store.set("core", state.core);
+    if (state.core === "off") sleepNow("Nucleo disattivato."); else { Net.power(false); syncMic(); }
+    settle();
+  });
+  function renderKeyRows() {
+    $("#r-claude").hidden = state.brain !== "claude";
+    $("#r-gemini").hidden = state.brain !== "gemini";
+  }
+  function bindText(id, get, set) {
+    var el = $("#" + id);
+    el.value = get();
+    el.addEventListener("input", function () { set(el.value.trim()); renderStatus(); renderVoiceBtn(); });
+  }
+  bindText("k-claude", function () { return store.get("kClaude", ""); }, function (v) { store.set("kClaude", v); });
+  bindText("k-gemini", function () { return store.get("kGemini", ""); }, function (v) { store.set("kGemini", v); });
+  bindText("k-gmodel", function () { return store.get("gModel", ""); }, function (v) { store.set("gModel", v); });
+  bindText("k-el", function () { return Voice.cfg.elKey; }, function (v) { Voice.cfg.elKey = v; Voice.save(); });
+  bindText("k-elvoice", function () { return Voice.cfg.elVoice; }, function (v) { Voice.cfg.elVoice = v; Voice.save(); });
+  var elModel = $("#k-elmodel");
+  elModel.value = Voice.cfg.elModel;
+  elModel.addEventListener("change", function () { Voice.cfg.elModel = elModel.value; Voice.save(); });
+  renderKeyRows();
+  var nameIn = $("#s-name");
+  nameIn.value = state.name;
+  nameIn.addEventListener("input", function () {
+    state.name = nameIn.value.trim().slice(0, 30) || "Signore";
+    store.set("name", state.name);
+  });
+  function syncCity(v) { state.city = v.trim().slice(0, 60); store.set("city", state.city); }
+  $("#w-city").value = state.city; $("#w-pref").value = state.city;
+  $("#w-city").addEventListener("input", function () { syncCity(this.value); $("#w-pref").value = state.city; });
+  $("#w-pref").addEventListener("input", function () { syncCity(this.value); $("#w-city").value = state.city; });
+
+  /* ---------- Attivazione e musica: impostazioni ---------- */
+  var phr = $("#s-phrases");
+  phr.value = state.phrases.join("\n");
+  phr.addEventListener("change", function () {
+    state.phrases = cleanPhrases(phr.value.split("\n"));
+    store.set("phrases", state.phrases);
+    phr.value = state.phrases.join("\n");
+    renderStatus(); renderUI();
+  });
+  function renderMusicState() {
+    var info = Music.info(), st = $("#m-state");
+    if (!info) { st.textContent = "Nessun file configurato."; st.classList.add("none"); }
+    else {
+      st.textContent = (info.bad ? "Non riproducibile: " : "Pronto: ") + info.name + " · " + (info.size / 1048576).toFixed(1).replace(".", ",") + " MB";
+      st.classList.toggle("none", !!info.bad);
+    }
+    $("#m-clear").disabled = !info;
+    $("#m-test").disabled = !info;
+    $("#m-stop").disabled = !Music.playing();
+    $("#s-mvol").value = Music.cfg.vol;
+    $("#s-mvol-v").textContent = Math.round(Music.cfg.vol * 100) + "%";
+    $("#s-mbed").value = Music.cfg.bed;
+    $("#s-mbed-v").textContent = Math.round(Music.cfg.bed * 100) + "%";
+    renderSeg("seg-music", Music.cfg.on ? "on" : "off");
+    renderHint();
+  }
+  $("#m-file").addEventListener("change", async function () {
+    var f = this.files && this.files[0];
+    this.value = "";
+    var r = await Music.choose(f);
+    $("#m-hint").textContent = !r.ok ? r.msg : r.saved
+      ? "Salvato su questo dispositivo. Il brano non viene caricato su alcun server."
+      : "Caricato, ma il browser non permette di salvarlo: resterà solo finché la pagina è aperta.";
+    renderMusicState(); renderStatus();
+  });
+  $("#m-clear").addEventListener("click", async function () {
+    await Music.clear();
+    $("#m-hint").textContent = "File rimosso da questo dispositivo.";
+    renderMusicState(); renderStatus();
+  });
+  $("#s-mvol").addEventListener("input", function () { Music.setVol(this.value); $("#s-mvol-v").textContent = Math.round(Music.cfg.vol * 100) + "%"; });
+  $("#s-mbed").addEventListener("input", function () { Music.setBed(this.value); $("#s-mbed-v").textContent = Math.round(Music.cfg.bed * 100) + "%"; });
+  $("#m-test").addEventListener("click", function () {
+    unlockAll();
+    Music.test().then(function (r) {
+      $("#m-hint").textContent = r === "started" ? "Riproduzione di prova per 8 secondi." : musicMsg(r);
+      if (r === "blocked") showGate("music");
+      renderMusicState();
+    });
+  });
+  $("#m-stop").addEventListener("click", function () { Music.stop(); renderMusicState(); });
+
+  /* ---------- Avvio ---------- */
+  if (!state.msgs.length) greeting();
+  if (store.get("ver", "") !== VERSION) {
+    state.msgs.push({ r: "sys", t: "JARVIS Ultron Edition " + VERSION + ": attivazione cinematografica, musica e voce." });
+    store.set("ver", VERSION);
+    saveMsgs();
+  }
+  $("#ver").textContent = "Ultron Edition · v" + VERSION;
+  Net.growTo(state.mind.neurons, false);
+  Net.intro();
+  renderLog();
+  renderMissions();
+  renderNotes();
+  renderVoiceBtn();
+  renderVoiceList();
+  renderStatus();
+  renderTele();
+  renderMusicState();
+  renderDoc();
+  Music.load().then(function () { renderMusicState(); renderStatus(); renderUI(); });
+  show("console");
+  if (STANDALONE && Ears.ok && wakeOn && state.core === "on") { gateWake = true; showGate("wake"); }
+  settle();
+  checkDue();
+  if (!STANDALONE) getSample();
+})();
+</script>
+</body></html>
